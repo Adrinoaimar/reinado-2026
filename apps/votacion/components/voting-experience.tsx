@@ -2,6 +2,7 @@
 
 import confetti from "canvas-confetti";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import Image from "next/image";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { getSupabaseBrowserClient, isSupabaseConfigured } from "@reinado/supabase-client";
 import type { Candidate, VoteResponse, VotingConfig } from "@reinado/types";
@@ -130,7 +131,7 @@ function CandidateCard({ candidate, index, canVote, onProfile, onVote }: { candi
 }
 
 function Portrait({ candidate, index }: { candidate: Candidate; index: number }) {
-  if (candidate.foto_principal_url) return <div className="candidate-card__portrait"><img src={candidate.foto_principal_url} alt={candidate.nombre_completo} loading="lazy" /></div>;
+  if (candidate.foto_principal_url) return <div className="candidate-card__portrait"><Image src={candidate.foto_principal_url} alt={candidate.nombre_completo} fill sizes="(max-width: 720px) 100vw, 420px" style={{ objectFit: "cover" }} /></div>;
   return <div className={`candidate-card__portrait generated-portrait generated-portrait--${(index % 3) + 1}`} role="img" aria-label={`Retrato decorativo de ${candidate.nombre_completo}`}><div className="portrait-silhouette" /><span>{candidate.nombre_completo.split(" ").map((part) => part[0]).slice(0, 2).join("")}</span></div>;
 }
 
