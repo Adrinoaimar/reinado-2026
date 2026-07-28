@@ -9,6 +9,13 @@ const googleModeMigration = readFileSync(
   "utf8"
 );
 const edge = readFileSync(join(root, "supabase/functions/emitir-voto/index.ts"), "utf8");
+const codeGeneratorEdge = readFileSync(join(root, "supabase/functions/generar-codigos/index.ts"), "utf8");
+const publicResultsEdge = readFileSync(join(root, "supabase/functions/resultados-publicos/index.ts"), "utf8");
+const retentionMigration = readFileSync(
+  join(root, "supabase/migrations/20260728160105_public_results_and_retention_job.sql"),
+  "utf8"
+);
+const votingUi = readFileSync(join(root, "apps/votacion/components/voting-experience.tsx"), "utf8");
 const gitignore = readFileSync(join(root, ".gitignore"), "utf8");
 
 describe("security invariants", () => {
@@ -47,5 +54,32 @@ describe("security invariants", () => {
   it("keeps sensitive deliverables out of Git", () => {
     expect(gitignore).toContain("entregables/CREDENCIALES_ADMIN.txt");
     expect(gitignore).toContain("entregables/codigos-*.csv");
+  });
+
+  it("generates at least 128 bits of visible code entropy", () => {
+    expect(codeGeneratorEdge).toContain("new Uint8Array(26)");
+    expect(codeGeneratorEdge).toContain("byte & 31");
+    expect(codeGeneratorEdge).not.toContain("slice(0, 12)");
+  });
+
+  it("publishes only aggregate results from a server-side boundary", () => {
+    expect(publicResultsEdge).toContain('select("mostrar_resultados")');
+    expect(publicResultsEdge).toContain('select("id", { count: "exact", head: true })');
+    expect(publicResultsEdge).not.toContain("votante_id");
+    expect(publicResultsEdge).not.toContain("codigo_hash");
+    expect(retentionMigration).not.toContain("security definer");
+  });
+
+  it("schedules automatic retention through supported pg_cron functions", () => {
+    expect(retentionMigration).toContain("cron.schedule");
+    expect(retentionMigration).toContain("cron.unschedule");
+    expect(retentionMigration).toContain("reinado-limpiar-intentos");
+    expect(retentionMigration).toContain("limpiar_intentos_antiguos");
+  });
+
+  it("requires an explicit Turnstile callback before voting", () => {
+    expect(votingUi).toContain("data-callback");
+    expect(votingUi).toContain("turnstileToken");
+    expect(votingUi).toContain("!turnstileToken");
   });
 });

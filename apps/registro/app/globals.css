@@ -128,7 +128,7 @@ h1, h2, h3 { font-family: Georgia, "Times New Roman", serif; letter-spacing: -.0
 .candidate-admin-card h3 { margin: 6px 0 3px; font-size: 20px; font-weight: 500; }
 .candidate-admin-card p { min-height: 18px; margin-bottom: 16px; color: var(--muted); font-size: 11px; }
 .card-actions { display: flex; gap: 6px; padding-top: 13px; border-top: 1px solid #eeeae1; }
-.card-actions button { border: 0; padding: 6px 8px; color: #5f6877; background: transparent; font-size: 10px; }
+.card-actions button, .card-actions a { border: 0; padding: 6px 8px; color: #5f6877; background: transparent; font-size: 10px; text-decoration: none; }
 .card-actions button:last-child { margin-left: auto; }
 .card-actions .danger-action { color: var(--wine); }
 .checkbox-label { grid-template-columns: auto 1fr; align-items: center; align-self: end; min-height: 42px; }
@@ -155,6 +155,26 @@ input[type="color"] { height: 42px; padding: 4px; }
 .code-export-actions { display: flex; gap: 7px; }
 .code-list { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 16px; }
 .code-list code { padding: 10px; border: 1px dashed #d8c58c; border-radius: 6px; color: #604816; background: #fffaf0; text-align: center; font-size: 11px; }
+.code-inventory { display: grid; gap: 18px; margin-top: 22px; }
+.code-stats { grid-template-columns: repeat(5, 1fr); margin: 0; }
+.code-stats article { display: grid; gap: 3px; padding: 16px; border: 1px solid var(--line); border-radius: 9px; background: var(--white); text-align: center; }
+.code-stats strong { font-family: Georgia, serif; font-size: 25px; font-weight: 500; }
+.code-stats span { color: var(--muted); font-size: 9px; text-transform: uppercase; letter-spacing: .08em; }
+.inventory-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 18px; margin-bottom: 16px; }
+.inventory-toolbar h3 { margin: 2px 0 0; }
+.inventory-toolbar input { width: min(310px, 100%); }
+.code-table-wrap { overflow-x: auto; }
+.code-table { width: 100%; border-collapse: collapse; font-size: 10px; }
+.code-table th, .code-table td { padding: 11px 9px; border-bottom: 1px solid #eeeae1; text-align: left; white-space: nowrap; }
+.code-table th { color: var(--muted); font-size: 8px; text-transform: uppercase; letter-spacing: .09em; }
+.code-status { display: inline-flex; border-radius: 999px; padding: 4px 8px; text-transform: capitalize; }
+.code-status--disponible { color: #176449; background: #e7f5ef; }
+.code-status--usado { color: #315e8b; background: #eaf2fa; }
+.code-status--vencido { color: #875d12; background: #fff3d9; }
+.code-status--anulado { color: #842447; background: #faeaf0; }
+.table-actions { display: flex; gap: 5px; }
+.table-actions button { border: 1px solid #ddd5c5; border-radius: 5px; padding: 5px 7px; color: #4f5866; background: #fff; font-size: 9px; }
+.table-actions button:hover { border-color: var(--gold); }
 .empty-state { padding: 45px 20px; color: var(--muted); text-align: center; }
 .empty-state__icon { display: grid; place-items: center; width: 54px; height: 54px; margin: 0 auto 15px; border: 1px solid #ead8a5; border-radius: 50%; color: var(--gold); background: #fff9e9; font-size: 25px; }
 .empty-state h3 { margin-bottom: 8px; color: var(--ink); }
@@ -168,6 +188,18 @@ input[type="color"] { height: 42px; padding: 4px; }
 .security-card > span { display: grid; place-items: center; width: 39px; height: 39px; margin-bottom: 17px; border-radius: 8px; color: var(--gold); background: #fbf3dd; font-size: 18px; }
 .security-card h3 { margin-bottom: 7px; font-size: 16px; }
 .security-card p { margin: 0; color: var(--muted); font-size: 10px; line-height: 1.6; }
+.security-stats { grid-template-columns: repeat(3, 1fr); margin-top: 20px; }
+.security-detail-grid { display: grid; grid-template-columns: .8fr 1.2fr; gap: 18px; }
+.pattern-list { display: grid; gap: 8px; }
+.pattern-list > div { display: flex; align-items: center; justify-content: space-between; padding: 10px; border: 1px solid #eee7d8; border-radius: 6px; background: #fffcf5; font-size: 10px; }
+.pattern-list code { color: #5f4d25; }
+.pattern-list span { color: var(--wine); font-weight: 700; }
+.audit-list { max-height: 370px; overflow-y: auto; margin: 0; padding: 0; list-style: none; }
+.audit-list li { display: grid; grid-template-columns: 70px 1fr; gap: 10px; padding: 11px 0; border-bottom: 1px solid #eeeae1; }
+.audit-list li > span { align-self: start; border-radius: 999px; padding: 4px 7px; color: #6b511a; background: #fbf3dd; font-size: 8px; text-align: center; text-transform: uppercase; }
+.audit-list strong, .audit-list small { display: block; }
+.audit-list strong { font-size: 11px; text-transform: capitalize; }
+.audit-list small { margin-top: 3px; color: var(--muted); font-size: 8px; }
 
 .modal-backdrop { position: fixed; inset: 0; z-index: 50; display: grid; place-items: center; padding: 20px; background: rgba(5,12,23,.7); backdrop-filter: blur(4px); }
 .modal { width: min(620px, 100%); max-height: 92vh; overflow-y: auto; display: grid; gap: 15px; padding: 27px; border: 1px solid rgba(255,255,255,.45); border-radius: 13px; background: var(--white); box-shadow: 0 30px 90px rgba(0,0,0,.3); }
@@ -184,6 +216,8 @@ input[type="color"] { height: 42px; padding: 4px; }
   .overview-grid, .settings-grid, .code-layout { grid-template-columns: 1fr; }
   .candidate-grid { grid-template-columns: 1fr 1fr; }
   .security-grid { grid-template-columns: 1fr 1fr; }
+  .code-stats { grid-template-columns: repeat(3, 1fr); }
+  .security-detail-grid { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 760px) {
@@ -199,9 +233,13 @@ input[type="color"] { height: 42px; padding: 4px; }
   .status-banner { grid-template-columns: auto 1fr; }
   .status-banner .button { grid-column: 1 / -1; }
   .stats-grid, .candidate-grid, .security-grid { grid-template-columns: 1fr; }
+  .security-stats { grid-template-columns: 1fr; }
   .quick-actions { grid-template-columns: 1fr; }
   .quick-actions button { min-height: 90px; }
   .form-row { grid-template-columns: 1fr; }
+  .code-stats { grid-template-columns: 1fr 1fr; }
+  .inventory-toolbar { align-items: stretch; flex-direction: column; }
+  .inventory-toolbar input { width: 100%; }
 }
 
 @media (prefers-reduced-motion: reduce) {

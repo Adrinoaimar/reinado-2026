@@ -6,7 +6,7 @@ import { Badge, Button, CrownMark, EmptyState, SectionHeading } from "@reinado/u
 import { getSupabaseBrowserClient, isSupabaseConfigured } from "@reinado/supabase-client";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Candidate, VotingConfig } from "@reinado/types";
-import { candidateSchema } from "@reinado/validation";
+import { candidateSchema, getVotingPhase } from "@reinado/validation";
 import { CodeGenerator } from "./code-generator";
 
 type View = "resumen" | "candidatas" | "codigos" | "configuracion" | "resultados" | "seguridad";
@@ -95,21 +95,31 @@ export function AdminDashboard() {
   const [mainPhoto, setMainPhoto] = useState<File | null>(null);
   const [galleryFiles, setGalleryFiles] = useState<File[]>([]);
   const [videoFile, setVideoFile] = useState<File | null>(null);
+  const [videoPoster, setVideoPoster] = useState<File | null>(null);
   const [notice, setNotice] = useState("");
   const configured = isSupabaseConfigured();
   const [authReady, setAuthReady] = useState(!configured);
   const [isAdmin, setIsAdmin] = useState(!configured);
   const [mustChangePassword, setMustChangePassword] = useState(false);
+  const [systemCounts, setSystemCounts] = useState({ availableCodes: 0, totalCodes: 0, votes: 0 });
 
   useEffect(() => {
     if (!configured || !isAdmin) return;
     const client = getSupabaseBrowserClient();
     void Promise.all([
       client.from("candidatas").select("*").order("orden"),
-      client.from("configuracion_votacion").select("*").eq("id", 1).single()
-    ]).then(([candidateResult, configResult]) => {
+      client.from("configuracion_votacion").select("*").eq("id", 1).single(),
+      client.from("codigos_votacion").select("id", { count: "exact", head: true }),
+      client.from("codigos_votacion").select("id", { count: "exact", head: true }).eq("activo", true).eq("usado", false),
+      client.from("votos").select("id", { count: "exact", head: true })
+    ]).then(([candidateResult, configResult, totalCodes, availableCodes, votes]) => {
       if (candidateResult.data) setCandidates(candidateResult.data as Candidate[]);
       if (configResult.data) setConfig(configResult.data as VotingConfig);
+      setSystemCounts({
+        totalCodes: totalCodes.count ?? 0,
+        availableCodes: availableCodes.count ?? 0,
+        votes: votes.count ?? 0
+      });
     });
   }, [configured, isAdmin]);
 
@@ -135,13 +145,22 @@ export function AdminDashboard() {
 
   const stats = useMemo(() => ({
     candidates: candidates.filter((candidate) => candidate.activa).length,
-    availableCodes: 0,
-    votes: 0,
-    participation: 0
-  }), [candidates]);
+    availableCodes: systemCounts.availableCodes,
+    votes: systemCounts.votes,
+    participation: systemCounts.totalCodes ? Math.round((systemCounts.votes / systemCounts.totalCodes) * 100) : 0
+  }), [candidates, systemCounts]);
 
   async function saveCandidate(event: React.FormEvent) {
     event.preventDefault();
+    const oversizedImage = [mainPhoto, videoPoster, ...galleryFiles].find((file) => file && file.size > 6 * 1024 * 1024);
+    if (oversizedImage) {
+      setNotice(`${oversizedImage.name} supera el límite de 6 MB para imágenes.`);
+      return;
+    }
+    if (videoFile && videoFile.size > 12 * 1024 * 1024) {
+      setNotice("El video supera 12 MB. Comprímelo con pnpm compress:media antes de subirlo.");
+      return;
+    }
     const parsed = candidateSchema.safeParse({
       ...form,
       apodo_o_titulo: form.apodo_o_titulo || null
@@ -162,7 +181,7 @@ export function AdminDashboard() {
           ? galleryFiles.map((file) => URL.createObjectURL(file))
           : editingCandidate?.galeria_urls ?? [],
         video_url: videoFile ? URL.createObjectURL(videoFile) : editingCandidate?.video_url ?? null,
-        video_poster_url: editingCandidate?.video_poster_url ?? null
+        video_poster_url: videoPoster ? URL.createObjectURL(videoPoster) : editingCandidate?.video_poster_url ?? null
       };
       setCandidates((current) => editingCandidate ? current.map((candidate) => candidate.id === candidateId ? value : candidate) : [...current, value]);
       setNotice(`Candidata ${editingCandidate ? "actualizada" : "agregada"} en demostración. Conecta Supabase para persistir.`);
@@ -172,10 +191,12 @@ export function AdminDashboard() {
         let photoUrl = editingCandidate?.foto_principal_url ?? null;
         let galleryUrls = editingCandidate?.galeria_urls ?? [];
         let videoUrl = editingCandidate?.video_url ?? null;
+        let videoPosterUrl = editingCandidate?.video_poster_url ?? null;
         if (mainPhoto) photoUrl = await uploadCandidateFile(client, "candidatas-fotos", candidateId, "principal", mainPhoto);
         if (galleryFiles.length) galleryUrls = await Promise.all(galleryFiles.slice(0, 12).map((file, index) => uploadCandidateFile(client, "candidatas-fotos", candidateId, `galeria-${index + 1}`, file)));
         if (videoFile) videoUrl = await uploadCandidateFile(client, "candidatas-videos", candidateId, "presentacion", videoFile);
-        const payload = { id: candidateId, ...parsed.data, foto_principal_url: photoUrl, galeria_urls: galleryUrls, video_url: videoUrl };
+        if (videoPoster) videoPosterUrl = await uploadCandidateFile(client, "candidatas-fotos", candidateId, "video-poster", videoPoster);
+        const payload = { id: candidateId, ...parsed.data, foto_principal_url: photoUrl, galeria_urls: galleryUrls, video_url: videoUrl, video_poster_url: videoPosterUrl };
         const query = editingCandidate
           ? client.from("candidatas").update(payload).eq("id", candidateId)
           : client.from("candidatas").insert(payload);
@@ -205,6 +226,7 @@ export function AdminDashboard() {
     setMainPhoto(null);
     setGalleryFiles([]);
     setVideoFile(null);
+    setVideoPoster(null);
     setEditorOpen(true);
   }
 
@@ -214,6 +236,7 @@ export function AdminDashboard() {
     setMainPhoto(null);
     setGalleryFiles([]);
     setVideoFile(null);
+    setVideoPoster(null);
     setEditorOpen(false);
   }
 
@@ -256,6 +279,14 @@ export function AdminDashboard() {
   async function saveConfig() {
     if (config.fecha_inicio && config.fecha_fin && new Date(config.fecha_inicio) >= new Date(config.fecha_fin)) {
       setNotice("La fecha de cierre debe ser posterior a la fecha de inicio.");
+      return;
+    }
+    if (config.modo_acceso !== "codigo" && !config.google_login_activo) {
+      setNotice("Activa Google antes de utilizar los modos Google o Google + código.");
+      return;
+    }
+    if (config.dominio_correo_permitido && !/^[a-z0-9.-]+\.[a-z]{2,}$/i.test(config.dominio_correo_permitido)) {
+      setNotice("Escribe únicamente un dominio válido, por ejemplo institucion.edu.");
       return;
     }
     if (configured) {
@@ -324,6 +355,7 @@ export function AdminDashboard() {
                         <p>{candidate.apodo_o_titulo}</p>
                         <div className="card-actions">
                           <button onClick={() => openEditor(candidate)}>Editar</button>
+                          <a href={`${process.env.NEXT_PUBLIC_VOTACION_URL ?? "http://localhost:3001"}?candidata=${candidate.id}#candidatas`} target="_blank" rel="noreferrer">Vista previa</a>
                           <button onClick={() => void toggleCandidate(candidate)}>{candidate.activa ? "Ocultar" : "Activar"}</button>
                           <button onClick={() => void moveCandidate(candidate, -1)} aria-label="Mover arriba">↑</button>
                           <button onClick={() => void moveCandidate(candidate, 1)} aria-label="Mover abajo">↓</button>
@@ -356,6 +388,7 @@ export function AdminDashboard() {
               <label className="upload-zone"><span>＋</span><strong>{mainPhoto?.name ?? "Foto principal"}</strong><small>JPG, PNG o WebP · máximo 6 MB</small><input type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => setMainPhoto(event.target.files?.[0] ?? null)} hidden /></label>
               <label className="upload-zone"><span>▦</span><strong>{galleryFiles.length ? `${galleryFiles.length} fotos seleccionadas` : "Galería"}</strong><small>Hasta 12 imágenes</small><input type="file" accept="image/jpeg,image/png,image/webp" multiple onChange={(event) => setGalleryFiles(Array.from(event.target.files ?? []).slice(0, 12))} hidden /></label>
               <label className="upload-zone"><span>▶</span><strong>{videoFile?.name ?? "Video comprimido"}</strong><small>MP4 · máximo 12 MB · usa pnpm compress:media</small><input type="file" accept="video/mp4" onChange={(event) => setVideoFile(event.target.files?.[0] ?? null)} hidden /></label>
+              <label className="upload-zone"><span>▣</span><strong>{videoPoster?.name ?? "Portada del video"}</strong><small>WebP, JPG o PNG · máximo 6 MB</small><input type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => setVideoPoster(event.target.files?.[0] ?? null)} hidden /></label>
               <div className="modal__actions"><Button type="button" className="button--ghost" onClick={closeEditor}>Cancelar</Button><Button type="submit">{editingCandidate ? "Actualizar" : "Guardar candidata"}</Button></div>
             </motion.form>
           </motion.div>
@@ -461,18 +494,26 @@ function AdminLogin({ onAuthenticated }: { onAuthenticated: (changeRequired: boo
 }
 
 function Overview({ stats, config, candidates, onNavigate }: { stats: { candidates: number; availableCodes: number; votes: number; participation: number }; config: VotingConfig; candidates: Candidate[]; onNavigate: (view: View) => void }) {
+  const phase = getVotingPhase(config.fecha_inicio, config.fecha_fin);
+  const status = {
+    closed: ["La votación está cerrada", "Define una fecha de inicio y cierre para abrir el evento."],
+    upcoming: ["La votación está programada", `Comenzará ${new Intl.DateTimeFormat("es", { dateStyle: "medium", timeStyle: "short" }).format(new Date(config.fecha_inicio!))}.`],
+    open: ["La votación está abierta", "El servidor está aceptando votos dentro de la ventana configurada."],
+    finished: ["La votación ha finalizado", config.mensaje_despues]
+  }[phase];
+  const modeLabel = { codigo: "Código único", google_codigo: "Google + código", google: "Solo Google" }[config.modo_acceso];
   return (
     <>
       <div className="status-banner">
         <div className="status-banner__icon">◷</div>
-        <div><p className="eyebrow">ESTADO ACTUAL</p><h2>La votación está cerrada</h2><p>Define una fecha de inicio y cierre para abrir el evento.</p></div>
+        <div><p className="eyebrow">ESTADO ACTUAL</p><h2>{status[0]}</h2><p>{status[1]}</p></div>
         <Button onClick={() => onNavigate("configuracion")}>Configurar fechas</Button>
       </div>
       <div className="stats-grid">
         <Stat icon="♛" label="Candidatas activas" value={String(stats.candidates)} note={`${candidates.length} registradas`} />
-        <Stat icon="◇" label="Códigos disponibles" value={String(stats.availableCodes)} note="Genera el primer lote" />
-        <Stat icon="✓" label="Votos registrados" value={String(stats.votes)} note="Sin votos aún" />
-        <Stat icon="↗" label="Participación" value={`${stats.participation}%`} note="Se calcula al abrir" />
+        <Stat icon="◇" label="Códigos disponibles" value={String(stats.availableCodes)} note={stats.availableCodes ? "Listos para distribuir" : "Genera el primer lote"} />
+        <Stat icon="✓" label="Votos registrados" value={String(stats.votes)} note={stats.votes ? "Conteo privado actualizado" : "Sin votos aún"} />
+        <Stat icon="↗" label="Participación" value={`${stats.participation}%`} note="Votos / códigos emitidos" />
       </div>
       <div className="overview-grid">
         <section className="panel">
@@ -486,10 +527,10 @@ function Overview({ stats, config, candidates, onNavigate }: { stats: { candidat
         <section className="panel">
           <SectionHeading eyebrow="CONFIGURACIÓN" title={config.nombre_evento} />
           <dl className="config-summary">
-            <div><dt>Modo de acceso</dt><dd><Badge>Código único</Badge></dd></div>
-            <div><dt>Google</dt><dd>Apagado</dd></div>
-            <div><dt>Resultados públicos</dt><dd>Ocultos</dd></div>
-            <div><dt>Ventana</dt><dd>Sin configurar</dd></div>
+            <div><dt>Modo de acceso</dt><dd><Badge>{modeLabel}</Badge></dd></div>
+            <div><dt>Google</dt><dd>{config.google_login_activo ? "Activo" : "Apagado"}</dd></div>
+            <div><dt>Resultados públicos</dt><dd>{config.mostrar_resultados ? "Visibles" : "Ocultos"}</dd></div>
+            <div><dt>Ventana</dt><dd>{config.fecha_inicio && config.fecha_fin ? "Configurada" : "Sin configurar"}</dd></div>
           </dl>
         </section>
       </div>
@@ -517,6 +558,8 @@ function Configuration({ config, onChange, onSave }: { config: VotingConfig; onC
           <h3>Acceso y privacidad</h3>
           <label>Modo de acceso<select value={config.modo_acceso} onChange={(event) => onChange({ ...config, modo_acceso: event.target.value as VotingConfig["modo_acceso"] })}><option value="codigo">Código único</option><option value="google_codigo">Google + código</option><option value="google">Solo Google (menos resistente)</option></select></label>
           <Toggle label="Inicio de sesión con Google" checked={config.google_login_activo} onChange={(checked) => onChange({ ...config, google_login_activo: checked })} />
+          <label>Dominio institucional opcional<input inputMode="url" placeholder="institucion.edu" value={config.dominio_correo_permitido ?? ""} onChange={(event) => onChange({ ...config, dominio_correo_permitido: event.target.value.trim().toLowerCase() || null })} /><small className="field-note">Se valida nuevamente en la Edge Function; no incluyas @ ni https://.</small></label>
+          {config.modo_acceso === "google" && <p className="danger-note">Solo Google permite que una persona use más de una cuenta. Para mayor resistencia utiliza Google + código.</p>}
           <Toggle label="Mostrar contador público" checked={config.mostrar_contador} onChange={(checked) => onChange({ ...config, mostrar_contador: checked })} />
           <Toggle label="Mostrar resultados públicos" checked={config.mostrar_resultados} onChange={(checked) => onChange({ ...config, mostrar_resultados: checked })} />
           <div className="form-row"><label>Color dorado<input type="color" value={config.color_primario} onChange={(event) => onChange({ ...config, color_primario: event.target.value })} /></label><label>Color acento<input type="color" value={config.color_acento} onChange={(event) => onChange({ ...config, color_acento: event.target.value })} /></label></div>
@@ -585,6 +628,34 @@ function Results({ candidates, configured }: { candidates: Candidate[]; configur
 }
 
 function Security({ configured }: { configured: boolean }) {
+  const [summary, setSummary] = useState({ last24hRejected: 0, totalVotes: 0, availableCodes: 0 });
+  const [patterns, setPatterns] = useState<Array<{ fingerprint: string; count: number }>>([]);
+  const [events, setEvents] = useState<Array<{ id: number; accion: string; entidad: string; entidad_id: string | null; creado_en: string }>>([]);
+
+  useEffect(() => {
+    if (!configured) return;
+    const client = getSupabaseBrowserClient();
+    const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    void Promise.all([
+      client.functions.invoke("auditoria-sistema"),
+      client.from("intentos_seguridad").select("ip_hash").eq("resultado", "rechazo").gte("creado_en", since).limit(500),
+      client.from("auditoria_admin").select("id, accion, entidad, entidad_id, creado_en").order("creado_en", { ascending: false }).limit(50)
+    ]).then(([audit, attempts, history]) => {
+      if (audit.data) setSummary(audit.data as typeof summary);
+      const grouped = new Map<string, number>();
+      for (const attempt of attempts.data ?? []) {
+        const fingerprint = String(attempt.ip_hash);
+        grouped.set(fingerprint, (grouped.get(fingerprint) ?? 0) + 1);
+      }
+      setPatterns([...grouped.entries()]
+        .filter(([, count]) => count >= 3)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 10)
+        .map(([fingerprint, count]) => ({ fingerprint: `${fingerprint.slice(0, 8)}…`, count })));
+      if (history.data) setEvents(history.data as typeof events);
+    });
+  }, [configured]);
+
   return (
     <section>
       <SectionHeading eyebrow="AUDITORÍA" title="Seguridad del sistema" />
@@ -597,6 +668,25 @@ function Security({ configured }: { configured: boolean }) {
           ["#", "IP anonimizada", "Solo se conserva un hash salado para rate limiting."],
           [configured ? "✓" : "!", configured ? "Supabase conectado" : "Infraestructura pendiente", configured ? "Las variables públicas están disponibles." : "Configura el proyecto Free antes de producción."]
         ].map(([icon, title, body]) => <article className="security-card" key={title}><span>{icon}</span><h3>{title}</h3><p>{body}</p></article>)}
+      </div>
+      <div className="stats-grid security-stats">
+        <Stat icon="!" label="Rechazos en 24 h" value={String(summary.last24hRejected)} note="Intentos bloqueados por el servidor" />
+        <Stat icon="✓" label="Votos registrados" value={String(summary.totalVotes)} note="Restricciones únicas activas" />
+        <Stat icon="◇" label="Códigos disponibles" value={String(summary.availableCodes)} note="Activos y todavía no usados" />
+      </div>
+      <div className="security-detail-grid">
+        <div className="panel">
+          <SectionHeading eyebrow="PATRONES" title="Actividad repetida" />
+          {patterns.length === 0 ? <EmptyState icon="✓" title="Sin patrones inusuales" body="No existen huellas anonimizadas con tres o más rechazos durante las últimas 24 horas." /> : (
+            <div className="pattern-list">{patterns.map((pattern) => <div key={pattern.fingerprint}><code>{pattern.fingerprint}</code><span>{pattern.count} rechazos</span></div>)}</div>
+          )}
+        </div>
+        <div className="panel">
+          <SectionHeading eyebrow="HISTORIAL" title="Eventos administrativos" />
+          {events.length === 0 ? <EmptyState icon="▥" title="Sin eventos todavía" body="Las ediciones de candidatas, configuración y códigos aparecerán aquí." /> : (
+            <ol className="audit-list">{events.map((event) => <li key={event.id}><span>{event.accion}</span><div><strong>{event.entidad}</strong><small>{event.entidad_id ? `${event.entidad_id.slice(0, 12)}… · ` : ""}{new Intl.DateTimeFormat("es", { dateStyle: "medium", timeStyle: "short" }).format(new Date(event.creado_en))}</small></div></li>)}</ol>
+          )}
+        </div>
       </div>
     </section>
   );

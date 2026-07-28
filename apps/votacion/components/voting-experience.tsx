@@ -3,7 +3,7 @@
 import confetti from "canvas-confetti";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import Image from "next/image";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getSupabaseBrowserClient, isSupabaseConfigured } from "@reinado/supabase-client";
 import type { Candidate, VoteResponse, VotingConfig } from "@reinado/types";
 import { getVotingPhase } from "@reinado/validation";
@@ -22,6 +22,8 @@ const demoConfig: VotingConfig = {
   mostrar_contador: false, mostrar_resultados: false, color_primario: "#d6aa4b", color_acento: "#751f3f"
 };
 
+type PublicResult = { candidata_id: string; nombre_completo: string; votos: number; porcentaje: number };
+
 export function VotingExperience() {
   const [candidates, setCandidates] = useState<Candidate[]>(demoCandidates);
   const [config, setConfig] = useState<VotingConfig>(demoConfig);
@@ -32,6 +34,8 @@ export function VotingExperience() {
   const [loading, setLoading] = useState(configured);
   const [access, setAccess] = useState<"none" | "anonymous" | "google">("none");
   const [now, setNow] = useState(() => new Date());
+  const [publicResults, setPublicResults] = useState<PublicResult[]>([]);
+  const previewHandled = useRef(false);
 
   useEffect(() => {
     if (!configured) return;
@@ -56,6 +60,11 @@ export function VotingExperience() {
         setHasVoted(true);
         localStorage.setItem("reinado:voted", "true");
       }
+      if (loadedConfig.mostrar_resultados) {
+        const result = await client.functions.invoke("resultados-publicos");
+        const rows = (result.data as { resultados?: PublicResult[] } | null)?.resultados;
+        if (rows) setPublicResults(rows);
+      }
       setLoading(false);
     })();
   }, [configured]);
@@ -65,9 +74,24 @@ export function VotingExperience() {
     return () => window.clearInterval(interval);
   }, []);
 
+  useEffect(() => {
+    if (previewHandled.current) return;
+    const candidateId = new URLSearchParams(window.location.search).get("candidata");
+    if (!candidateId) {
+      previewHandled.current = true;
+      return;
+    }
+    const candidate = candidates.find((item) => item.id === candidateId);
+    if (candidate) {
+      previewHandled.current = true;
+      queueMicrotask(() => setProfile(candidate));
+    }
+  }, [candidates]);
+
   const phase = useMemo(() => getVotingPhase(config.fecha_inicio, config.fecha_fin, now), [config, now]);
-  const requiresGoogle = config.modo_acceso === "google" || config.modo_acceso === "google_codigo";
+  const requiresGoogle = config.google_login_activo && (config.modo_acceso === "google" || config.modo_acceso === "google_codigo");
   const accessReady = !requiresGoogle || access === "google";
+  const phaseMessage = phase === "finished" ? config.mensaje_despues : config.mensaje_antes;
 
   async function signInWithGoogle() {
     if (!configured) return;
@@ -80,7 +104,7 @@ export function VotingExperience() {
   return (
     <main className="public-shell" style={{ "--event-gold": config.color_primario, "--event-accent": config.color_acento } as React.CSSProperties}>
       <header className="public-header">
-        <a href="#inicio" className="public-brand"><span>♛</span><div><strong>REINADO</strong><small>MMXXVI</small></div></a>
+        <a href="#inicio" className="public-brand"><span>♛</span><div><strong>{config.nombre_evento.toUpperCase()}</strong><small>MMXXVI</small></div></a>
         <nav><a href="#candidatas">Candidatas</a><a href="#como-votar">Cómo votar</a><span className={`live-pill ${phase === "open" ? "is-live" : ""}`}>{phase === "open" ? "Votación abierta" : "Votación cerrada"}</span></nav>
       </header>
 
@@ -100,7 +124,7 @@ export function VotingExperience() {
           ) : phase === "open" ? (
             <a className="royal-button" href="#candidatas">Conocer candidatas <span>↓</span></a>
           ) : (
-            <div className="hero-status"><span>◷</span><div><strong>La votación está cerrada</strong><small>{config.mensaje_antes}</small></div></div>
+            <div className="hero-status"><span>◷</span><div><strong>{phase === "finished" ? "La votación ha finalizado" : "La votación está cerrada"}</strong><small>{phaseMessage}</small></div></div>
           )}
         </motion.div>
         <div className="hero__seal"><span>2026</span><small>EDICIÓN</small></div>
@@ -112,7 +136,14 @@ export function VotingExperience() {
           <h2>Conoce a las candidatas</h2>
           <p>Cada historia merece ser escuchada. Abre un perfil para conocer su esencia.</p>
         </div>
-        {loading ? <div className="candidate-stack"><div className="candidate-card skeleton" /></div> : (
+        {loading ? <div className="candidate-stack"><div className="candidate-card skeleton" /></div> : phase === "open" && requiresGoogle && !accessReady ? (
+          <div className="access-gate">
+            <span>G</span>
+            <h3>Acceso con Google requerido</h3>
+            <p>Inicia sesión para consultar los perfiles y emitir un único voto durante este evento.</p>
+            <button className="royal-button" onClick={() => void signInWithGoogle()}>Continuar con Google</button>
+          </div>
+        ) : (
           <div className="candidate-stack">
             {candidates.map((candidate, index) => (
               <CandidateCard key={candidate.id} candidate={candidate} index={index} canVote={phase === "open" && !hasVoted && accessReady} onProfile={setProfile} onVote={setSelected} />
@@ -120,6 +151,23 @@ export function VotingExperience() {
           </div>
         )}
       </section>
+
+      {config.mostrar_resultados && publicResults.length > 0 && (
+        <section className="public-results" aria-labelledby="resultados-publicos">
+          <div className="section-intro">
+            <p className="gold-kicker">CONTEO PÚBLICO</p>
+            <h2 id="resultados-publicos">Resultados del evento</h2>
+            <p>Solo se muestran cifras agregadas; nunca identidades ni códigos.</p>
+          </div>
+          <div className="public-results__list">{publicResults.map((result) => (
+            <article key={result.candidata_id}>
+              <div><strong>{result.nombre_completo}</strong>{config.mostrar_contador && <span>{result.votos} votos</span>}</div>
+              <div className="public-results__bar"><i style={{ width: `${result.porcentaje}%` }} /></div>
+              <em>{result.porcentaje}%</em>
+            </article>
+          ))}</div>
+        </section>
+      )}
 
       <section className="how-section" id="como-votar">
         <div className="section-intro section-intro--light"><p className="gold-kicker">SIMPLE Y SEGURO</p><h2>Tu elección en tres pasos</h2></div>
@@ -131,7 +179,7 @@ export function VotingExperience() {
         <p className="privacy-note">◉ Tu código se usa una sola vez. No almacenamos tu IP visible.</p>
       </section>
 
-      <footer><div className="public-brand"><span>♛</span><div><strong>REINADO</strong><small>MMXXVI</small></div></div><p>Una celebración de talento, propósito y comunidad.</p><small>Votación protegida con código único y Cloudflare Turnstile.</small></footer>
+      <footer><div className="public-brand"><span>♛</span><div><strong>{config.nombre_evento.toUpperCase()}</strong><small>MMXXVI</small></div></div><p>Una celebración de talento, propósito y comunidad.</p><small>Votación protegida con código único y Cloudflare Turnstile.</small></footer>
 
       <AnimatePresence>
         {profile && <ProfileModal candidate={profile} canVote={phase === "open" && !hasVoted && accessReady} onClose={() => setProfile(null)} onVote={() => { setSelected(profile); setProfile(null); }} />}
@@ -169,17 +217,45 @@ function CandidateCard({ candidate, index, canVote, onProfile, onVote }: { candi
   );
 }
 
-function Portrait({ candidate, index }: { candidate: Candidate; index: number }) {
+function Portrait({ candidate, index, previewVideo = true }: { candidate: Candidate; index: number; previewVideo?: boolean }) {
+  if (candidate.video_url && previewVideo) return <VideoPreview candidate={candidate} />;
   if (candidate.foto_principal_url) return <div className="candidate-card__portrait"><Image src={candidate.foto_principal_url} alt={candidate.nombre_completo} fill sizes="(max-width: 720px) 100vw, 420px" style={{ objectFit: "cover" }} /></div>;
   return <div className={`candidate-card__portrait generated-portrait generated-portrait--${(index % 3) + 1}`} role="img" aria-label={`Retrato decorativo de ${candidate.nombre_completo}`}><div className="portrait-silhouette" /><span>{candidate.nombre_completo.split(" ").map((part) => part[0]).slice(0, 2).join("")}</span></div>;
 }
 
+function VideoPreview({ candidate }: { candidate: Candidate }) {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+    const observer = new IntersectionObserver(([entry]) => {
+      if (entry?.isIntersecting) void video.play().catch(() => undefined);
+      else video.pause();
+    }, { threshold: .55 });
+    observer.observe(video);
+    return () => observer.disconnect();
+  }, []);
+  return <div className="candidate-card__portrait"><video ref={videoRef} src={candidate.video_url ?? undefined} poster={candidate.video_poster_url ?? candidate.foto_principal_url ?? undefined} muted loop playsInline preload="metadata" aria-label={`Video de presentación de ${candidate.nombre_completo}`} /></div>;
+}
+
 function ProfileModal({ candidate, canVote, onClose, onVote }: { candidate: Candidate; canVote: boolean; onClose: () => void; onVote: () => void }) {
+  useEffect(() => {
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [onClose]);
+
   return (
     <motion.div className="public-modal-backdrop" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onMouseDown={onClose}>
-      <motion.article className="profile-modal" initial={{ scale: .96, y: 24 }} animate={{ scale: 1, y: 0 }} exit={{ scale: .96 }} onMouseDown={(event) => event.stopPropagation()}>
+      <motion.article className="profile-modal" role="dialog" aria-modal="true" aria-label={`Perfil de ${candidate.nombre_completo}`} initial={{ scale: .96, y: 24 }} animate={{ scale: 1, y: 0 }} exit={{ scale: .96 }} onMouseDown={(event) => event.stopPropagation()}>
         <button className="close-button" onClick={onClose} aria-label="Cerrar">×</button>
-        <Portrait candidate={candidate} index={0} />
+        <div className="profile-modal__media">
+          <Portrait candidate={candidate} index={0} previewVideo={false} />
+          {candidate.video_url && <video className="profile-video" src={candidate.video_url} poster={candidate.video_poster_url ?? candidate.foto_principal_url ?? undefined} controls playsInline preload="metadata" aria-label={`Video completo de ${candidate.nombre_completo}`} />}
+          {candidate.galeria_urls.length > 0 && <div className="profile-gallery">{candidate.galeria_urls.map((url, index) => <Image key={url} src={url} alt={`${candidate.nombre_completo}, fotografía ${index + 1}`} width={220} height={150} sizes="(max-width: 720px) 42vw, 180px" />)}</div>}
+        </div>
         <div className="profile-modal__content"><p className="gold-kicker">{candidate.representa_a}</p><h2>{candidate.nombre_completo}</h2><em>{candidate.apodo_o_titulo}</em><blockquote>“{candidate.descripcion}”</blockquote><div className="profile-tags"><span>Propósito</span><span>Comunidad</span><span>Talento</span></div>{canVote && <button className="royal-button" onClick={onVote}>Votar por ella ♛</button>}</div>
       </motion.article>
     </motion.div>
@@ -190,6 +266,16 @@ function VoteModal({ candidate, configured, requiresCode, onClose, onSuccess }: 
   const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<VoteResponse | null>(null);
+  const [turnstileToken, setTurnstileToken] = useState("");
+  const turnstileSiteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY ?? "";
+
+  useEffect(() => {
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && !busy) onClose();
+    };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [busy, onClose]);
 
   const submit = useCallback(async (event: React.FormEvent) => {
     event.preventDefault();
@@ -201,21 +287,24 @@ function VoteModal({ candidate, configured, requiresCode, onClose, onSuccess }: 
       return;
     }
     const client = getSupabaseBrowserClient();
-    const turnstileToken = (document.querySelector<HTMLInputElement>('[name="cf-turnstile-response"]')?.value ?? "");
     const { data, error } = await client.functions.invoke("emitir-voto", { body: { candidataId: candidate.id, codigo: code, turnstileToken } });
     const response = (data ?? { ok: false, code: "ERROR", message: error?.message ?? "No pudimos registrar el voto." }) as VoteResponse;
     setResult(response);
     setBusy(false);
+    if (!response.ok) {
+      setTurnstileToken("");
+      (window as Window & { turnstile?: { reset: () => void } }).turnstile?.reset();
+    }
     if (response.ok) {
       localStorage.setItem("reinado:voted", "true");
       confetti({ particleCount: 130, spread: 75, colors: ["#d6aa4b", "#fff3c4", "#751f3f"], origin: { y: .7 } });
       setTimeout(onSuccess, 1500);
     }
-  }, [candidate.id, code, configured, onSuccess]);
+  }, [candidate.id, code, configured, onSuccess, turnstileToken]);
 
   return (
     <motion.div className="public-modal-backdrop" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onMouseDown={onClose}>
-      <motion.form className="vote-modal" initial={{ scale: .95, y: 22 }} animate={{ scale: 1, y: 0 }} exit={{ scale: .95 }} onSubmit={submit} onMouseDown={(event) => event.stopPropagation()}>
+      <motion.form className="vote-modal" role="dialog" aria-modal="true" aria-label={`Confirmar voto por ${candidate.nombre_completo}`} initial={{ scale: .95, y: 22 }} animate={{ scale: 1, y: 0 }} exit={{ scale: .95 }} onSubmit={submit} onMouseDown={(event) => event.stopPropagation()}>
         <button type="button" className="close-button" onClick={onClose} aria-label="Cerrar">×</button>
         <span className="vote-crown">♛</span>
         <p className="gold-kicker">CONFIRMA TU ELECCIÓN</p>
@@ -223,23 +312,28 @@ function VoteModal({ candidate, configured, requiresCode, onClose, onSuccess }: 
         <div className="chosen-candidate"><div>{candidate.nombre_completo.split(" ").map((part) => part[0]).slice(0, 2).join("")}</div><span><small>HAS ELEGIDO A</small><strong>{candidate.nombre_completo}</strong></span></div>
         {requiresCode ? <><label>Código único de votación<input autoFocus autoComplete="one-time-code" placeholder="REY-XXXX-XXXX-XXXX" value={code} onChange={(event) => setCode(event.target.value.toUpperCase())} required minLength={10} /></label>
         <p className="code-help">Lo encontrarás en la invitación que recibiste. Solo puede usarse una vez.</p></> : <p className="google-confirmation">✓ Tu cuenta de Google será la identidad única asociada al voto.</p>}
-        {process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY ? <TurnstileWidget siteKey={process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY} /> : <div className="turnstile-placeholder">Turnstile se activará en producción</div>}
+        {turnstileSiteKey ? <TurnstileWidget siteKey={turnstileSiteKey} onToken={setTurnstileToken} /> : <div className="turnstile-placeholder">Turnstile debe configurarse antes de habilitar producción</div>}
         {result && <p className={result.ok ? "vote-result vote-result--ok" : "vote-result"}>{result.message}</p>}
-        <button className="royal-button royal-button--wide" disabled={busy}>{busy ? "Verificando…" : "Confirmar mi voto"} <span>♛</span></button>
+        <button className="royal-button royal-button--wide" disabled={busy || (configured && (!turnstileSiteKey || !turnstileToken))}>{busy ? "Verificando…" : !turnstileToken && configured ? "Completa la verificación" : "Confirmar mi voto"} <span>♛</span></button>
         <p className="secure-caption">◉ Operación cifrada · Tu código nunca se muestra públicamente</p>
       </motion.form>
     </motion.div>
   );
 }
 
-function TurnstileWidget({ siteKey }: { siteKey: string }) {
+function TurnstileWidget({ siteKey, onToken }: { siteKey: string; onToken: (token: string) => void }) {
+  const callbackName = useMemo(() => `reinadoTurnstile_${crypto.randomUUID().replaceAll("-", "")}`, []);
   useEffect(() => {
-    if (document.querySelector('script[src*="turnstile"]')) return;
-    const script = document.createElement("script");
-    script.src = "https://challenges.cloudflare.com/turnstile/v0/api.js";
-    script.async = true;
-    script.defer = true;
-    document.head.appendChild(script);
-  }, []);
-  return <div className="cf-turnstile" data-sitekey={siteKey} data-theme="light" data-size="flexible" />;
+    const callbacks = window as unknown as Window & Record<string, unknown>;
+    callbacks[callbackName] = onToken;
+    if (!document.querySelector('script[src*="turnstile"]')) {
+      const script = document.createElement("script");
+      script.src = "https://challenges.cloudflare.com/turnstile/v0/api.js";
+      script.async = true;
+      script.defer = true;
+      document.head.appendChild(script);
+    }
+    return () => { delete callbacks[callbackName]; };
+  }, [callbackName, onToken]);
+  return <div className="cf-turnstile" data-sitekey={siteKey} data-theme="light" data-size="flexible" data-callback={callbackName} />;
 }

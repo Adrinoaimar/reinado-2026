@@ -12,9 +12,9 @@ async function sha256(value: string): Promise<string> {
 
 function newCode(): string {
   const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-  const bytes = crypto.getRandomValues(new Uint8Array(16));
-  const text = [...bytes].map((byte) => alphabet[byte % alphabet.length]).join("").slice(0, 12);
-  return `REY-${text.slice(0, 4)}-${text.slice(4, 8)}-${text.slice(8, 12)}`;
+  const bytes = crypto.getRandomValues(new Uint8Array(26));
+  const text = [...bytes].map((byte) => alphabet[byte & 31]).join("");
+  return `REY-${text.slice(0, 5)}-${text.slice(5, 10)}-${text.slice(10, 15)}-${text.slice(15, 20)}-${text.slice(20)}`;
 }
 
 Deno.serve(async (request: Request) => {

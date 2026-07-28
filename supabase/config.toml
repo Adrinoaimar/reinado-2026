@@ -38,3 +38,6 @@ verify_jwt = false
 
 [functions.auditoria-sistema]
 verify_jwt = true
+
+[functions.resultados-publicos]
+verify_jwt = false
