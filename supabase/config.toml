@@ -17,15 +17,26 @@ port = 54323
 
 [auth]
 enabled = true
-site_url = "http://localhost:3001"
-additional_redirect_urls = ["http://localhost:3000/**", "http://localhost:3001/**"]
+site_url = "https://reinado-votacion.pages.dev"
+additional_redirect_urls = [
+  "https://reinado-votacion.pages.dev/**",
+  "https://reinado-registro.pages.dev/**",
+  "http://localhost:3000/**",
+  "http://localhost:3001/**"
+]
 enable_signup = true
 enable_anonymous_sign_ins = true
 
 [auth.email]
-enable_signup = false
+enable_signup = true
 double_confirm_changes = true
 enable_confirmations = true
+max_frequency = "1m"
+otp_length = 8
+
+[auth.mfa.totp]
+enroll_enabled = true
+verify_enabled = true
 
 [functions.emitir-voto]
 verify_jwt = true

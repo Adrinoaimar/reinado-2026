@@ -2,42 +2,47 @@
 
 ## Estado
 
-El código, la base de datos y las Edge Functions están construidos y verificados. La publicación de las dos aplicaciones en Cloudflare Pages y el correo final quedan pospuestos por indicación del propietario hasta revisar la inestabilidad del navegador de Codex durante OAuth. No se inició ninguna autenticación nueva.
+El sistema está desplegado en Cloudflare Pages y conectado al proyecto productivo de Supabase:
+
+- Administración: `https://reinado-registro.pages.dev`
+- Votación pública: `https://reinado-votacion.pages.dev`
+
+La votación se entrega cerrada, sin candidatas publicadas, sin fechas y con resultados públicos desactivados. El administrador debe cargar los perfiles oficiales y decidir cuándo abrirla.
 
 ## Arquitectura
 
 - Monorepo pnpm + Turborepo.
 - Next.js 16, React 19 y TypeScript estricto.
-- Dos aplicaciones exportables:
-  - `apps/registro`
-  - `apps/votacion`
+- Exportaciones estáticas en Cloudflare Pages Free.
 - Supabase PostgreSQL, Auth, Storage, Cron y Edge Functions.
-- Destino previsto: Cloudflare Pages Free + Turnstile Free.
+- Cloudflare Turnstile Free restringido a `reinado-votacion.pages.dev`.
 
 ## Supabase
 
 - Proyecto: `ignwxkpzpilecbkdzfpt`.
 - URL: `https://ignwxkpzpilecbkdzfpt.supabase.co`.
-- Tablas del sistema: `candidatas`, `votantes`, `codigos_votacion`, `votos`, `configuracion_votacion`, `administradores`, `intentos_seguridad`, `auditoria_admin`.
 - Edge Functions activas:
   - `emitir-voto`
   - `generar-codigos`
   - `crear-admin-inicial`
   - `auditoria-sistema`
   - `resultados-publicos`
-- Limpieza automática diaria de intentos de seguridad mediante `pg_cron`.
-- La votación se entrega cerrada, con fechas nulas y resultados públicos desactivados.
+- Inicio anónimo habilitado para el modo por código.
+- URLs de Auth configuradas para los dos sitios de producción.
+- Limpieza diaria de intentos de seguridad mediante `pg_cron`.
+- Superadministrador creado; exige cambio de contraseña en el primer acceso.
+- El secreto de bootstrap administrativo fue eliminado después del alta.
 
 ## Seguridad
 
 - Códigos con 130 bits aleatorios visibles una sola vez.
 - Sólo se almacena SHA-256 del código normalizado con pepper.
-- Consumo del código e inserción del voto dentro de una transacción con bloqueo de fila.
+- Consumo del código e inserción del voto dentro de una transacción con bloqueo.
 - Un voto por código y un voto por identidad mediante restricciones únicas.
-- Turnstile, JWT, dominio opcional, fechas y rate limit validados en servidor.
+- Turnstile, JWT, fechas, dominio opcional y rate limit validados en servidor.
 - IP almacenada sólo como hash salado.
-- Resultados públicos agregados por una Edge Function; nunca expone identidades ni hashes.
-- RLS de mínimo privilegio.
+- Resultados públicos agregados en servidor.
+- RLS de mínimo privilegio; la lectura pública de candidatas activas no ejecuta funciones administrativas.
 - Credenciales y exportaciones sensibles excluidas de Git.
 
 ## Operación
@@ -50,10 +55,13 @@ pnpm deploy:all
 pnpm verify:prod
 ```
 
-## Pendiente por decisión del propietario
+## Acciones del administrador
 
-- No abrir OAuth ni ejecutar `wrangler login` por el momento.
-- Cuando se autorice reanudar autenticaciones: configurar Turnstile, publicar ambos sitios en Cloudflare Pages y ejecutar QA de producción.
-- Enviar el correo final únicamente después de que la producción quede verificada.
+1. Abrir `https://reinado-registro.pages.dev`.
+2. Entrar con `entregables/CREDENCIALES_ADMIN.txt`.
+3. Cambiar inmediatamente la contraseña temporal.
+4. Cargar candidatas, fotos, portadas y videos oficiales.
+5. Configurar fechas y modo de acceso.
+6. Generar y distribuir los códigos antes de abrir la votación.
 
-No se configuró facturación, plan de pago, dominio comprado, Twilio, Resend ni Cloudflare Stream.
+No se configuró facturación, dominio comprado ni servicios de pago.

@@ -15,6 +15,11 @@ const retentionMigration = readFileSync(
   join(root, "supabase/migrations/20260728160105_public_results_and_retention_job.sql"),
   "utf8"
 );
+const publicPolicyMigration = readFileSync(
+  join(root, "supabase/migrations/20260728190731_fix_public_candidate_policy.sql"),
+  "utf8"
+);
+const supabaseConfig = readFileSync(join(root, "supabase/config.toml"), "utf8");
 const votingUi = readFileSync(join(root, "apps/votacion/components/voting-experience.tsx"), "utf8");
 const gitignore = readFileSync(join(root, ".gitignore"), "utf8");
 
@@ -81,5 +86,17 @@ describe("security invariants", () => {
     expect(votingUi).toContain("data-callback");
     expect(votingUi).toContain("turnstileToken");
     expect(votingUi).toContain("!turnstileToken");
+  });
+
+  it("keeps public candidate reads independent from administrator privileges", () => {
+    expect(publicPolicyMigration).toContain("using (activa = true)");
+    expect(publicPolicyMigration).not.toContain("es_admin()");
+    expect(publicPolicyMigration).toContain("grant usage on schema private to authenticated, service_role");
+  });
+
+  it("enables anonymous sessions only on the production-aware auth configuration", () => {
+    expect(supabaseConfig).toContain("enable_anonymous_sign_ins = true");
+    expect(supabaseConfig).toContain('site_url = "https://reinado-votacion.pages.dev"');
+    expect(supabaseConfig).toContain('"https://reinado-registro.pages.dev/**"');
   });
 });

@@ -143,6 +143,12 @@ export function VotingExperience() {
             <p>Inicia sesión para consultar los perfiles y emitir un único voto durante este evento.</p>
             <button className="royal-button" onClick={() => void signInWithGoogle()}>Continuar con Google</button>
           </div>
+        ) : candidates.length === 0 ? (
+          <div className="access-gate">
+            <span>♛</span>
+            <h3>Próximamente conocerás a las candidatas</h3>
+            <p>El equipo organizador está preparando los perfiles oficiales del evento.</p>
+          </div>
         ) : (
           <div className="candidate-stack">
             {candidates.map((candidate, index) => (
