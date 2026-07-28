@@ -14,7 +14,7 @@
     "lint": "turbo run lint",
     "typecheck": "turbo run typecheck",
     "test": "vitest run",
-    "test:all": "turbo run lint typecheck test build",
+    "test:all": "pnpm test && turbo run lint typecheck test build",
     "test:e2e": "playwright test",
     "build": "turbo run build",
     "deploy:all": "node scripts/deploy-all.mjs",
