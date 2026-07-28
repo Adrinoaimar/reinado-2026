@@ -1,0 +1,37 @@
+{
+  "name": "@reinado/registro",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev --port 3000",
+    "build": "next build",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@reinado/supabase-client": "workspace:*",
+    "@reinado/types": "workspace:*",
+    "@reinado/ui": "workspace:*",
+    "@reinado/validation": "workspace:*",
+    "@supabase/supabase-js": "2.110.9",
+    "framer-motion": "12.42.2",
+    "jspdf": "3.0.2",
+    "next": "16.2.12",
+    "qrcode": "1.5.4",
+    "react": "19.2.8",
+    "react-dom": "19.2.8"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "4.3.3",
+    "@types/node": "24.3.0",
+    "@types/qrcode": "1.5.5",
+    "@types/react": "19.1.12",
+    "@types/react-dom": "19.1.9",
+    "eslint": "9.34.0",
+    "eslint-config-next": "16.2.12",
+    "tailwindcss": "4.3.3",
+    "typescript": "5.9.2",
+    "vitest": "3.2.4"
+  }
+}

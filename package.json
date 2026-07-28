@@ -1,0 +1,38 @@
+{
+  "name": "reinado-2026",
+  "version": "1.0.0",
+  "private": true,
+  "packageManager": "pnpm@11.9.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "turbo run dev",
+    "preflight": "node scripts/preflight.mjs",
+    "setup:local": "node scripts/setup-local.mjs",
+    "setup:cloud": "node scripts/setup-cloud.mjs",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "test": "vitest run",
+    "test:all": "turbo run lint typecheck test build",
+    "test:e2e": "playwright test",
+    "build": "turbo run build",
+    "deploy:all": "node scripts/deploy-all.mjs",
+    "verify:prod": "node scripts/verify-production.mjs",
+    "compress:media": "node scripts/compress-media.mjs",
+    "generate:admin": "node scripts/generate-admin.mjs",
+    "autopilot": "pnpm preflight && pnpm setup:local && pnpm test:all && pnpm setup:cloud && pnpm deploy:all && pnpm verify:prod"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.62.0",
+    "@types/node": "24.3.0",
+    "@types/react": "19.1.12",
+    "@types/react-dom": "19.1.9",
+    "dotenv": "17.2.2",
+    "supabase": "2.110.0",
+    "turbo": "2.10.7",
+    "typescript": "5.9.2",
+    "vitest": "3.2.4",
+    "wrangler": "4.114.0"
+  }
+}

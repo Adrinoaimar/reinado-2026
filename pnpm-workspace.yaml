@@ -1,0 +1,27 @@
+packages:
+  - "apps/*"
+  - "packages/*"
+
+allowBuilds:
+  core-js: true
+  esbuild: true
+  sharp: true
+  unrs-resolver: true
+  workerd: true
+
+minimumReleaseAgeExclude:
+  - '@supabase/auth-js@2.110.9'
+  - '@supabase/cli-darwin-arm64@2.110.0'
+  - '@supabase/cli-darwin-x64@2.110.0'
+  - '@supabase/cli-linux-arm64-musl@2.110.0'
+  - '@supabase/cli-linux-arm64@2.110.0'
+  - '@supabase/cli-linux-x64-musl@2.110.0'
+  - '@supabase/cli-linux-x64@2.110.0'
+  - '@supabase/cli-windows-arm64@2.110.0'
+  - '@supabase/cli-windows-x64@2.110.0'
+  - '@supabase/functions-js@2.110.9'
+  - '@supabase/postgrest-js@2.110.9'
+  - '@supabase/realtime-js@2.110.9'
+  - '@supabase/storage-js@2.110.9'
+  - '@supabase/supabase-js@2.110.9'
+  - supabase@2.110.0
