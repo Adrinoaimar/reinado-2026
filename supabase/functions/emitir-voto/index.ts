@@ -111,7 +111,14 @@ Deno.serve(async (request: Request) => {
     ultimo_acceso: new Date().toISOString()
   });
 
-  const codeHash = await sha256(`${codePepper}:${normalizeCode(body.codigo)}`);
+  const requiresCode = config?.modo_acceso !== "google";
+  const normalizedCode = normalizeCode(body.codigo);
+  if (requiresCode && normalizedCode.length < 8) {
+    return json({ ok: false, code: "CODIGO_INVALIDO", message: "El código no es válido, ya fue usado o venció." }, 400);
+  }
+  const codeHash = requiresCode
+    ? await sha256(`${codePepper}:${normalizedCode}`)
+    : "0".repeat(64);
   const { data: result, error } = await admin.rpc("emitir_voto_seguro", {
     p_votante_id: userData.user.id,
     p_codigo_hash: codeHash,

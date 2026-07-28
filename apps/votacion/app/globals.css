@@ -51,6 +51,11 @@ h1, h2, h3 { font-family: Georgia, "Times New Roman", serif; font-weight: 400; l
 .hero-status strong { font-family: Georgia, serif; font-size: 14px; }
 .hero-status small { margin-top: 3px; color: #9fa9b7; font-size: 9px; }
 .hero-status--success > span { color: #60c99d; background: rgba(96,201,157,.1); }
+.countdown { display: inline-grid; grid-template-columns: repeat(4, 1fr); gap: 7px; }
+.countdown > span { min-width: 62px; padding: 11px 8px; border: 1px solid rgba(214,170,75,.27); background: rgba(9,20,36,.72); }
+.countdown strong, .countdown small { display: block; }
+.countdown strong { color: #fff; font-family: Georgia, serif; font-size: 22px; font-weight: 400; }
+.countdown small { margin-top: 3px; color: #8f9baa; font-size: 7px; letter-spacing: .12em; text-transform: uppercase; }
 .hero__seal { position: absolute; right: 7%; bottom: 8%; z-index: 2; display: grid; place-items: center; width: 68px; height: 68px; border: 1px solid rgba(214,170,75,.36); border-radius: 50%; color: var(--gold); transform: rotate(8deg); }
 .hero__seal::before { content: ""; position: absolute; inset: 5px; border: 1px dashed rgba(214,170,75,.3); border-radius: 50%; }
 .hero__seal span, .hero__seal small { position: relative; display: block; }
@@ -131,6 +136,7 @@ footer > p { text-align: center; } footer > small { text-align: right; }
 .vote-modal input { width: 100%; border: 1px solid #d7c896; border-radius: 2px; padding: 13px; color: #273345; background: #fff; text-align: center; letter-spacing: .12em; outline: none; }
 .vote-modal input:focus { box-shadow: 0 0 0 3px rgba(214,170,75,.13); }
 .code-help { margin: 7px 0 17px; color: #8b8a86; font-size: 8px; line-height: 1.5; }
+.google-confirmation { margin: 0 0 17px; padding: 11px; color: #176449; background: #e7f5ef; font-size: 9px; }
 .turnstile-placeholder { margin-bottom: 16px; border: 1px dashed #d8d3c8; padding: 12px; color: #8b8a86; background: #faf9f6; font-size: 9px; }
 .royal-button--wide { width: 100%; }
 .vote-result { padding: 10px; color: #842447; background: #faeaf0; font-size: 9px; line-height: 1.5; }

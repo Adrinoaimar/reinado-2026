@@ -1,6 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import { jsPDF } from "jspdf";
+import QRCode from "qrcode";
 import { Button, EmptyState, SectionHeading } from "@reinado/ui";
 import { codeBatchSchema } from "@reinado/validation";
 import { getSupabaseBrowserClient } from "@reinado/supabase-client";
@@ -51,6 +53,36 @@ export function CodeGenerator({ configured, onNotice }: { configured: boolean; o
     URL.revokeObjectURL(link.href);
   }
 
+  async function downloadPdf() {
+    const pdf = new jsPDF({ unit: "mm", format: "a4" });
+    pdf.setProperties({ title: `Códigos ${batch}`, subject: "Códigos únicos de votación" });
+    for (let index = 0; index < generated.length; index += 1) {
+      if (index > 0 && index % 8 === 0) pdf.addPage();
+      const cell = index % 8;
+      const column = cell % 2;
+      const row = Math.floor(cell / 2);
+      const x = 14 + column * 94;
+      const y = 15 + row * 68;
+      const qr = await QRCode.toDataURL(generated[index]!, { errorCorrectionLevel: "M", margin: 1, width: 250 });
+      pdf.setDrawColor(214, 190, 130);
+      pdf.roundedRect(x, y, 88, 60, 2, 2);
+      pdf.addImage(qr, "PNG", x + 4, y + 7, 38, 38);
+      pdf.setFont("times", "bold");
+      pdf.setFontSize(11);
+      pdf.text("REINADO 2026", x + 45, y + 14);
+      pdf.setFont("courier", "bold");
+      pdf.setFontSize(9);
+      pdf.text(generated[index]!, x + 45, y + 25);
+      pdf.setFont("helvetica", "normal");
+      pdf.setFontSize(7);
+      pdf.text(label || "Código único", x + 45, y + 33);
+      pdf.text(`Lote: ${batch}`, x + 45, y + 39);
+      pdf.setFontSize(6);
+      pdf.text("Un solo uso · No compartir", x + 45, y + 48);
+    }
+    pdf.save(`codigos-${batch.toLowerCase()}.pdf`);
+  }
+
   return (
     <section>
       <SectionHeading eyebrow="ACCESO ÚNICO" title="Códigos de votación" />
@@ -66,7 +98,7 @@ export function CodeGenerator({ configured, onNotice }: { configured: boolean; o
         <div className="panel">
           {generated.length === 0 ? <EmptyState icon="◇" title="Ningún código visible" body="Los códigos solo se muestran durante su exportación inicial." /> : (
             <>
-              <div className="code-result-header"><div><p className="eyebrow">GENERADOS AHORA</p><h3>{generated.length} códigos</h3></div><Button onClick={downloadCsv}>Descargar CSV</Button></div>
+              <div className="code-result-header"><div><p className="eyebrow">GENERADOS AHORA</p><h3>{generated.length} códigos</h3></div><div className="code-export-actions"><Button className="button--ghost" onClick={() => void downloadPdf()}>PDF con QR</Button><Button onClick={downloadCsv}>CSV</Button></div></div>
               <div className="code-list">{generated.slice(0, 8).map((code) => <code key={code}>{code}</code>)}</div>
               {generated.length > 8 && <p className="field-note">+ {generated.length - 8} adicionales en la exportación.</p>}
               <p className="danger-note">Guarda la exportación ahora. Al cerrar esta pantalla no se volverá a mostrar el texto completo.</p>

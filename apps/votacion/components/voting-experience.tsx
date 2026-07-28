@@ -30,28 +30,52 @@ export function VotingExperience() {
   const configured = isSupabaseConfigured();
   const [hasVoted, setHasVoted] = useState(() => typeof window !== "undefined" && localStorage.getItem("reinado:voted") === "true");
   const [loading, setLoading] = useState(configured);
+  const [access, setAccess] = useState<"none" | "anonymous" | "google">("none");
+  const [now, setNow] = useState(() => new Date());
 
   useEffect(() => {
     if (!configured) return;
     const client = getSupabaseBrowserClient();
-    void client.auth.getSession().then(async ({ data }) => {
-      if (!data.session) await client.auth.signInAnonymously();
-      const [candidateResult, configResult, voteResult] = await Promise.all([
+    void (async () => {
+      const [candidateResult, configResult] = await Promise.all([
         client.from("candidatas").select("*").eq("activa", true).order("orden"),
-        client.from("configuracion_votacion").select("*").eq("id", 1).single(),
-        client.from("votos").select("id").limit(1)
+        client.from("configuracion_votacion").select("*").eq("id", 1).single()
       ]);
       if (candidateResult.data) setCandidates(candidateResult.data as Candidate[]);
-      if (configResult.data) setConfig(configResult.data as VotingConfig);
+      const loadedConfig = (configResult.data as VotingConfig | null) ?? demoConfig;
+      setConfig(loadedConfig);
+      let { data: sessionData } = await client.auth.getSession();
+      if (loadedConfig.modo_acceso === "codigo" && !sessionData.session) {
+        const signedIn = await client.auth.signInAnonymously();
+        sessionData = { session: signedIn.data.session };
+      }
+      const user = sessionData.session?.user;
+      setAccess(user?.app_metadata?.provider === "google" && !user.is_anonymous ? "google" : user ? "anonymous" : "none");
+      const voteResult = user ? await client.from("votos").select("id").limit(1) : { data: null };
       if (voteResult.data?.length) {
         setHasVoted(true);
         localStorage.setItem("reinado:voted", "true");
       }
       setLoading(false);
-    });
+    })();
   }, [configured]);
 
-  const phase = useMemo(() => getVotingPhase(config.fecha_inicio, config.fecha_fin), [config]);
+  useEffect(() => {
+    const interval = window.setInterval(() => setNow(new Date()), 1000);
+    return () => window.clearInterval(interval);
+  }, []);
+
+  const phase = useMemo(() => getVotingPhase(config.fecha_inicio, config.fecha_fin, now), [config, now]);
+  const requiresGoogle = config.modo_acceso === "google" || config.modo_acceso === "google_codigo";
+  const accessReady = !requiresGoogle || access === "google";
+
+  async function signInWithGoogle() {
+    if (!configured) return;
+    await getSupabaseBrowserClient().auth.signInWithOAuth({
+      provider: "google",
+      options: { redirectTo: window.location.href }
+    });
+  }
 
   return (
     <main className="public-shell" style={{ "--event-gold": config.color_primario, "--event-accent": config.color_acento } as React.CSSProperties}>
@@ -69,6 +93,10 @@ export function VotingExperience() {
           <p className="hero__lead">Conoce sus historias, descubre lo que representan y elige a quien llevará la corona.</p>
           {hasVoted ? (
             <div className="hero-status hero-status--success"><span>✓</span><div><strong>Tu voto ya fue registrado</strong><small>Gracias por ser parte de esta celebración.</small></div></div>
+          ) : phase === "upcoming" && config.fecha_inicio ? (
+            <Countdown target={config.fecha_inicio} now={now} />
+          ) : phase === "open" && requiresGoogle && !accessReady ? (
+            <button className="royal-button" onClick={() => void signInWithGoogle()}>Continuar con Google <span>G</span></button>
           ) : phase === "open" ? (
             <a className="royal-button" href="#candidatas">Conocer candidatas <span>↓</span></a>
           ) : (
@@ -87,7 +115,7 @@ export function VotingExperience() {
         {loading ? <div className="candidate-stack"><div className="candidate-card skeleton" /></div> : (
           <div className="candidate-stack">
             {candidates.map((candidate, index) => (
-              <CandidateCard key={candidate.id} candidate={candidate} index={index} canVote={phase === "open" && !hasVoted} onProfile={setProfile} onVote={setSelected} />
+              <CandidateCard key={candidate.id} candidate={candidate} index={index} canVote={phase === "open" && !hasVoted && accessReady} onProfile={setProfile} onVote={setSelected} />
             ))}
           </div>
         )}
@@ -106,11 +134,22 @@ export function VotingExperience() {
       <footer><div className="public-brand"><span>♛</span><div><strong>REINADO</strong><small>MMXXVI</small></div></div><p>Una celebración de talento, propósito y comunidad.</p><small>Votación protegida con código único y Cloudflare Turnstile.</small></footer>
 
       <AnimatePresence>
-        {profile && <ProfileModal candidate={profile} canVote={phase === "open" && !hasVoted} onClose={() => setProfile(null)} onVote={() => { setSelected(profile); setProfile(null); }} />}
-        {selected && <VoteModal candidate={selected} configured={configured} onClose={() => setSelected(null)} onSuccess={() => { setHasVoted(true); setSelected(null); }} />}
+        {profile && <ProfileModal candidate={profile} canVote={phase === "open" && !hasVoted && accessReady} onClose={() => setProfile(null)} onVote={() => { setSelected(profile); setProfile(null); }} />}
+        {selected && <VoteModal candidate={selected} configured={configured} requiresCode={config.modo_acceso !== "google"} onClose={() => setSelected(null)} onSuccess={() => { setHasVoted(true); setSelected(null); }} />}
       </AnimatePresence>
     </main>
   );
+}
+
+function Countdown({ target, now }: { target: string; now: Date }) {
+  const remaining = Math.max(new Date(target).getTime() - now.getTime(), 0);
+  const units = [
+    ["Días", Math.floor(remaining / 86_400_000)],
+    ["Horas", Math.floor((remaining / 3_600_000) % 24)],
+    ["Min", Math.floor((remaining / 60_000) % 60)],
+    ["Seg", Math.floor((remaining / 1000) % 60)]
+  ] as const;
+  return <div className="countdown" aria-label="Tiempo restante para el inicio">{units.map(([label, value]) => <span key={label}><strong>{String(value).padStart(2, "0")}</strong><small>{label}</small></span>)}</div>;
 }
 
 function CandidateCard({ candidate, index, canVote, onProfile, onVote }: { candidate: Candidate; index: number; canVote: boolean; onProfile: (candidate: Candidate) => void; onVote: (candidate: Candidate) => void }) {
@@ -147,7 +186,7 @@ function ProfileModal({ candidate, canVote, onClose, onVote }: { candidate: Cand
   );
 }
 
-function VoteModal({ candidate, configured, onClose, onSuccess }: { candidate: Candidate; configured: boolean; onClose: () => void; onSuccess: () => void }) {
+function VoteModal({ candidate, configured, requiresCode, onClose, onSuccess }: { candidate: Candidate; configured: boolean; requiresCode: boolean; onClose: () => void; onSuccess: () => void }) {
   const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<VoteResponse | null>(null);
@@ -182,8 +221,8 @@ function VoteModal({ candidate, configured, onClose, onSuccess }: { candidate: C
         <p className="gold-kicker">CONFIRMA TU ELECCIÓN</p>
         <h2>Tu voto es definitivo</h2>
         <div className="chosen-candidate"><div>{candidate.nombre_completo.split(" ").map((part) => part[0]).slice(0, 2).join("")}</div><span><small>HAS ELEGIDO A</small><strong>{candidate.nombre_completo}</strong></span></div>
-        <label>Código único de votación<input autoFocus autoComplete="one-time-code" placeholder="REY-XXXX-XXXX-XXXX" value={code} onChange={(event) => setCode(event.target.value.toUpperCase())} required minLength={10} /></label>
-        <p className="code-help">Lo encontrarás en la invitación que recibiste. Solo puede usarse una vez.</p>
+        {requiresCode ? <><label>Código único de votación<input autoFocus autoComplete="one-time-code" placeholder="REY-XXXX-XXXX-XXXX" value={code} onChange={(event) => setCode(event.target.value.toUpperCase())} required minLength={10} /></label>
+        <p className="code-help">Lo encontrarás en la invitación que recibiste. Solo puede usarse una vez.</p></> : <p className="google-confirmation">✓ Tu cuenta de Google será la identidad única asociada al voto.</p>}
         {process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY ? <TurnstileWidget siteKey={process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY} /> : <div className="turnstile-placeholder">Turnstile se activará en producción</div>}
         {result && <p className={result.ok ? "vote-result vote-result--ok" : "vote-result"}>{result.message}</p>}
         <button className="royal-button royal-button--wide" disabled={busy}>{busy ? "Verificando…" : "Confirmar mi voto"} <span>♛</span></button>

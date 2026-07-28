@@ -4,6 +4,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { useEffect, useMemo, useState } from "react";
 import { Badge, Button, CrownMark, EmptyState, SectionHeading } from "@reinado/ui";
 import { getSupabaseBrowserClient, isSupabaseConfigured } from "@reinado/supabase-client";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Candidate, VotingConfig } from "@reinado/types";
 import { candidateSchema } from "@reinado/validation";
 import { CodeGenerator } from "./code-generator";
@@ -76,12 +77,24 @@ const nav: Array<{ id: View; label: string; icon: string }> = [
   { id: "seguridad", label: "Seguridad", icon: "◉" }
 ];
 
+async function uploadCandidateFile(client: SupabaseClient, bucket: string, candidateId: string, label: string, file: File): Promise<string> {
+  const extension = file.name.split(".").pop()?.toLowerCase().replace(/[^a-z0-9]/g, "") || (bucket.endsWith("videos") ? "mp4" : "webp");
+  const path = `${candidateId}/${label}.${extension}`;
+  const { error } = await client.storage.from(bucket).upload(path, file, { upsert: true, contentType: file.type, cacheControl: "3600" });
+  if (error) throw new Error(error.message);
+  return client.storage.from(bucket).getPublicUrl(path).data.publicUrl;
+}
+
 export function AdminDashboard() {
   const [view, setView] = useState<View>("resumen");
   const [candidates, setCandidates] = useState<Candidate[]>(demoCandidates);
   const [config, setConfig] = useState<VotingConfig>(defaultConfig);
   const [editorOpen, setEditorOpen] = useState(false);
   const [form, setForm] = useState(emptyCandidate);
+  const [editingCandidate, setEditingCandidate] = useState<Candidate | null>(null);
+  const [mainPhoto, setMainPhoto] = useState<File | null>(null);
+  const [galleryFiles, setGalleryFiles] = useState<File[]>([]);
+  const [videoFile, setVideoFile] = useState<File | null>(null);
   const [notice, setNotice] = useState("");
   const configured = isSupabaseConfigured();
   const [authReady, setAuthReady] = useState(!configured);
@@ -137,29 +150,107 @@ export function AdminDashboard() {
       setNotice("Revisa los campos: nombre, descripción y representación son obligatorios.");
       return;
     }
+    const candidateId = editingCandidate?.id ?? crypto.randomUUID();
     if (!configured) {
-      setCandidates((current) => [...current, {
-        id: crypto.randomUUID(),
+      const value: Candidate = {
+        id: candidateId,
         ...parsed.data,
         apodo_o_titulo: parsed.data.apodo_o_titulo ?? null,
         edad: parsed.data.edad ?? null,
-        foto_principal_url: null,
-        galeria_urls: [],
-        video_url: null,
-        video_poster_url: null
-      }]);
-      setNotice("Candidata agregada en la vista de demostración. Conecta Supabase para persistirla.");
+        foto_principal_url: mainPhoto ? URL.createObjectURL(mainPhoto) : editingCandidate?.foto_principal_url ?? null,
+        galeria_urls: galleryFiles.length
+          ? galleryFiles.map((file) => URL.createObjectURL(file))
+          : editingCandidate?.galeria_urls ?? [],
+        video_url: videoFile ? URL.createObjectURL(videoFile) : editingCandidate?.video_url ?? null,
+        video_poster_url: editingCandidate?.video_poster_url ?? null
+      };
+      setCandidates((current) => editingCandidate ? current.map((candidate) => candidate.id === candidateId ? value : candidate) : [...current, value]);
+      setNotice(`Candidata ${editingCandidate ? "actualizada" : "agregada"} en demostración. Conecta Supabase para persistir.`);
     } else {
-      const { data, error } = await getSupabaseBrowserClient().from("candidatas").insert(parsed.data).select().single();
-      if (error) {
-        setNotice("No se pudo guardar. Verifica tu sesión de administrador.");
+      try {
+        const client = getSupabaseBrowserClient();
+        let photoUrl = editingCandidate?.foto_principal_url ?? null;
+        let galleryUrls = editingCandidate?.galeria_urls ?? [];
+        let videoUrl = editingCandidate?.video_url ?? null;
+        if (mainPhoto) photoUrl = await uploadCandidateFile(client, "candidatas-fotos", candidateId, "principal", mainPhoto);
+        if (galleryFiles.length) galleryUrls = await Promise.all(galleryFiles.slice(0, 12).map((file, index) => uploadCandidateFile(client, "candidatas-fotos", candidateId, `galeria-${index + 1}`, file)));
+        if (videoFile) videoUrl = await uploadCandidateFile(client, "candidatas-videos", candidateId, "presentacion", videoFile);
+        const payload = { id: candidateId, ...parsed.data, foto_principal_url: photoUrl, galeria_urls: galleryUrls, video_url: videoUrl };
+        const query = editingCandidate
+          ? client.from("candidatas").update(payload).eq("id", candidateId)
+          : client.from("candidatas").insert(payload);
+        const { data, error } = await query.select().single();
+        if (error) throw error;
+        setCandidates((current) => editingCandidate ? current.map((candidate) => candidate.id === candidateId ? data as Candidate : candidate) : [...current, data as Candidate]);
+        setNotice(`Candidata ${editingCandidate ? "actualizada" : "guardada"}.`);
+      } catch (error) {
+        setNotice(`No se pudo guardar: ${error instanceof Error ? error.message : "error desconocido"}`);
         return;
       }
-      setCandidates((current) => [...current, data as Candidate]);
-      setNotice("Candidata guardada.");
     }
+    closeEditor();
+  }
+
+  function openEditor(candidate?: Candidate) {
+    setEditingCandidate(candidate ?? null);
+    setForm(candidate ? {
+      nombre_completo: candidate.nombre_completo,
+      apodo_o_titulo: candidate.apodo_o_titulo ?? "",
+      edad: candidate.edad ?? 18,
+      descripcion: candidate.descripcion,
+      representa_a: candidate.representa_a,
+      orden: candidate.orden,
+      activa: candidate.activa
+    } : emptyCandidate);
+    setMainPhoto(null);
+    setGalleryFiles([]);
+    setVideoFile(null);
+    setEditorOpen(true);
+  }
+
+  function closeEditor() {
     setForm(emptyCandidate);
+    setEditingCandidate(null);
+    setMainPhoto(null);
+    setGalleryFiles([]);
+    setVideoFile(null);
     setEditorOpen(false);
+  }
+
+  async function toggleCandidate(candidate: Candidate) {
+    const next = !candidate.activa;
+    if (configured) {
+      const { error } = await getSupabaseBrowserClient().from("candidatas").update({ activa: next }).eq("id", candidate.id);
+      if (error) return setNotice("No se pudo cambiar el estado.");
+    }
+    setCandidates((current) => current.map((item) => item.id === candidate.id ? { ...item, activa: next } : item));
+  }
+
+  async function deleteCandidate(candidate: Candidate) {
+    if (!window.confirm(`¿Eliminar a ${candidate.nombre_completo}? Esta acción solo funciona si todavía no tiene votos.`)) return;
+    if (configured) {
+      const { error } = await getSupabaseBrowserClient().from("candidatas").delete().eq("id", candidate.id);
+      if (error) return setNotice("No se puede eliminar: puede tener votos asociados.");
+    }
+    setCandidates((current) => current.filter((item) => item.id !== candidate.id));
+    setNotice("Candidata eliminada.");
+  }
+
+  async function moveCandidate(candidate: Candidate, direction: -1 | 1) {
+    const ordered = [...candidates].sort((a, b) => a.orden - b.orden);
+    const index = ordered.findIndex((item) => item.id === candidate.id);
+    const other = ordered[index + direction];
+    if (!other) return;
+    const updates = [
+      { ...candidate, orden: other.orden },
+      { ...other, orden: candidate.orden }
+    ];
+    if (configured) {
+      const client = getSupabaseBrowserClient();
+      const results = await Promise.all(updates.map((item) => client.from("candidatas").update({ orden: item.orden }).eq("id", item.id)));
+      if (results.some((result) => result.error)) return setNotice("No se pudo cambiar el orden.");
+    }
+    setCandidates((current) => current.map((item) => updates.find((update) => update.id === item.id) ?? item).sort((a, b) => a.orden - b.orden));
   }
 
   async function saveConfig() {
@@ -219,7 +310,7 @@ export function AdminDashboard() {
             {view === "resumen" && <Overview stats={stats} config={config} candidates={candidates} onNavigate={setView} />}
             {view === "candidatas" && (
               <section>
-                <SectionHeading eyebrow="EL ELENCO" title="Candidatas" aside={<Button onClick={() => setEditorOpen(true)}>+ Nueva candidata</Button>} />
+                <SectionHeading eyebrow="EL ELENCO" title="Candidatas" aside={<Button onClick={() => openEditor()}>+ Nueva candidata</Button>} />
                 <div className="candidate-grid">
                   {candidates.map((candidate, index) => (
                     <article className="candidate-admin-card" key={candidate.id}>
@@ -231,7 +322,13 @@ export function AdminDashboard() {
                         <small>{candidate.representa_a}</small>
                         <h3>{candidate.nombre_completo}</h3>
                         <p>{candidate.apodo_o_titulo}</p>
-                        <div className="card-actions"><button>Editar</button><button>Vista previa</button><button aria-label="Más opciones">•••</button></div>
+                        <div className="card-actions">
+                          <button onClick={() => openEditor(candidate)}>Editar</button>
+                          <button onClick={() => void toggleCandidate(candidate)}>{candidate.activa ? "Ocultar" : "Activar"}</button>
+                          <button onClick={() => void moveCandidate(candidate, -1)} aria-label="Mover arriba">↑</button>
+                          <button onClick={() => void moveCandidate(candidate, 1)} aria-label="Mover abajo">↓</button>
+                          <button className="danger-action" onClick={() => void deleteCandidate(candidate)}>Eliminar</button>
+                        </div>
                       </div>
                     </article>
                   ))}
@@ -240,7 +337,7 @@ export function AdminDashboard() {
             )}
             {view === "codigos" && <CodeGenerator configured={configured} onNotice={setNotice} />}
             {view === "configuracion" && <Configuration config={config} onChange={setConfig} onSave={saveConfig} />}
-            {view === "resultados" && <Results candidates={candidates} />}
+            {view === "resultados" && <Results candidates={candidates} configured={configured} />}
             {view === "seguridad" && <Security configured={configured} />}
           </motion.div>
         </AnimatePresence>
@@ -248,20 +345,71 @@ export function AdminDashboard() {
 
       <AnimatePresence>
         {editorOpen && (
-          <motion.div className="modal-backdrop" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onMouseDown={() => setEditorOpen(false)}>
+          <motion.div className="modal-backdrop" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onMouseDown={closeEditor}>
             <motion.form className="modal" initial={{ scale: .96, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: .96 }} onSubmit={saveCandidate} onMouseDown={(event) => event.stopPropagation()}>
-              <div className="modal__header"><div><p className="eyebrow">NUEVO PERFIL</p><h2>Agregar candidata</h2></div><button type="button" onClick={() => setEditorOpen(false)}>×</button></div>
+              <div className="modal__header"><div><p className="eyebrow">{editingCandidate ? "EDITAR PERFIL" : "NUEVO PERFIL"}</p><h2>{editingCandidate ? "Actualizar candidata" : "Agregar candidata"}</h2></div><button type="button" onClick={closeEditor}>×</button></div>
               <label>Nombre completo<input value={form.nombre_completo} onChange={(event) => setForm({ ...form, nombre_completo: event.target.value })} required /></label>
               <div className="form-row"><label>Título o apodo<input value={form.apodo_o_titulo} onChange={(event) => setForm({ ...form, apodo_o_titulo: event.target.value })} /></label><label>Edad<input type="number" value={form.edad} onChange={(event) => setForm({ ...form, edad: Number(event.target.value) })} /></label></div>
               <label>Representa a<input value={form.representa_a} onChange={(event) => setForm({ ...form, representa_a: event.target.value })} required /></label>
               <label>Biografía<textarea rows={5} value={form.descripcion} onChange={(event) => setForm({ ...form, descripcion: event.target.value })} required /></label>
-              <label className="upload-zone"><span>＋</span><strong>Foto principal</strong><small>JPG, PNG o WebP · máximo 6 MB</small><input type="file" accept="image/*" hidden /></label>
-              <div className="modal__actions"><Button type="button" className="button--ghost" onClick={() => setEditorOpen(false)}>Cancelar</Button><Button type="submit">Guardar candidata</Button></div>
+              <div className="form-row"><label>Orden<input type="number" min={0} value={form.orden} onChange={(event) => setForm({ ...form, orden: Number(event.target.value) })} /></label><label className="checkbox-label"><input type="checkbox" checked={form.activa} onChange={(event) => setForm({ ...form, activa: event.target.checked })} /> Visible públicamente</label></div>
+              <label className="upload-zone"><span>＋</span><strong>{mainPhoto?.name ?? "Foto principal"}</strong><small>JPG, PNG o WebP · máximo 6 MB</small><input type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => setMainPhoto(event.target.files?.[0] ?? null)} hidden /></label>
+              <label className="upload-zone"><span>▦</span><strong>{galleryFiles.length ? `${galleryFiles.length} fotos seleccionadas` : "Galería"}</strong><small>Hasta 12 imágenes</small><input type="file" accept="image/jpeg,image/png,image/webp" multiple onChange={(event) => setGalleryFiles(Array.from(event.target.files ?? []).slice(0, 12))} hidden /></label>
+              <label className="upload-zone"><span>▶</span><strong>{videoFile?.name ?? "Video comprimido"}</strong><small>MP4 · máximo 12 MB · usa pnpm compress:media</small><input type="file" accept="video/mp4" onChange={(event) => setVideoFile(event.target.files?.[0] ?? null)} hidden /></label>
+              <div className="modal__actions"><Button type="button" className="button--ghost" onClick={closeEditor}>Cancelar</Button><Button type="submit">{editingCandidate ? "Actualizar" : "Guardar candidata"}</Button></div>
             </motion.form>
           </motion.div>
         )}
       </AnimatePresence>
+      {mustChangePassword && <PasswordChangeModal onComplete={() => setMustChangePassword(false)} />}
     </main>
+  );
+}
+
+function PasswordChangeModal({ onComplete }: { onComplete: () => void }) {
+  const [password, setPassword] = useState("");
+  const [confirmation, setConfirmation] = useState("");
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  async function updatePassword(event: React.FormEvent) {
+    event.preventDefault();
+    if (password.length < 16 || password !== confirmation) {
+      setError("Usa al menos 16 caracteres y confirma la misma contraseña.");
+      return;
+    }
+    setBusy(true);
+    const client = getSupabaseBrowserClient();
+    const { data: userResult, error: authError } = await client.auth.updateUser({ password });
+    if (authError || !userResult.user) {
+      setError(authError?.message ?? "No se pudo actualizar la contraseña.");
+      setBusy(false);
+      return;
+    }
+    const { error: profileError } = await client.from("administradores")
+      .update({ debe_cambiar_password: false })
+      .eq("id", userResult.user.id);
+    if (profileError) {
+      setError("La contraseña cambió, pero no se pudo confirmar el estado del perfil.");
+      setBusy(false);
+      return;
+    }
+    onComplete();
+  }
+
+  return (
+    <div className="modal-backdrop password-gate">
+      <form className="modal password-modal" onSubmit={updatePassword}>
+        <span className="auth-loader">♛</span>
+        <p className="eyebrow">PRIMER ACCESO</p>
+        <h2>Crea tu contraseña privada</h2>
+        <p>La contraseña temporal dejará de ser necesaria después de este cambio.</p>
+        <label>Nueva contraseña<input type="password" autoComplete="new-password" minLength={16} value={password} onChange={(event) => setPassword(event.target.value)} required /></label>
+        <label>Confirmar contraseña<input type="password" autoComplete="new-password" minLength={16} value={confirmation} onChange={(event) => setConfirmation(event.target.value)} required /></label>
+        {error && <p className="auth-error">{error}</p>}
+        <Button type="submit" disabled={busy}>{busy ? "Actualizando…" : "Guardar y continuar"}</Button>
+      </form>
+    </div>
   );
 }
 
@@ -382,13 +530,55 @@ function Toggle({ label, checked, onChange }: { label: string; checked: boolean;
   return <label className="toggle-row"><span>{label}</span><input type="checkbox" checked={checked} onChange={(event) => onChange(event.target.checked)} /><i /></label>;
 }
 
-function Results({ candidates }: { candidates: Candidate[] }) {
+function Results({ candidates, configured }: { candidates: Candidate[]; configured: boolean }) {
+  const [counts, setCounts] = useState<Record<string, number>>({});
+  const [issuedCodes, setIssuedCodes] = useState(0);
+  const totalVotes = Object.values(counts).reduce((sum, value) => sum + value, 0);
+
+  useEffect(() => {
+    if (!configured) return;
+    const client = getSupabaseBrowserClient();
+    void Promise.all([
+      client.from("votos").select("candidata_id"),
+      client.from("codigos_votacion").select("id", { count: "exact", head: true })
+    ]).then(([votes, codes]) => {
+      const next: Record<string, number> = {};
+      for (const vote of votes.data ?? []) next[vote.candidata_id as string] = (next[vote.candidata_id as string] ?? 0) + 1;
+      setCounts(next);
+      setIssuedCodes(codes.count ?? 0);
+    });
+  }, [configured]);
+
+  function exportResults() {
+    const rows = candidates
+      .map((candidate) => {
+        const votes = counts[candidate.id] ?? 0;
+        const percentage = totalVotes ? ((votes / totalVotes) * 100).toFixed(2) : "0.00";
+        return `"${candidate.nombre_completo.replaceAll('"', '""')}","${candidate.representa_a.replaceAll('"', '""')}",${votes},${percentage}`;
+      });
+    const csv = ["candidata,representa_a,votos,porcentaje", ...rows].join("\n");
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+    link.download = "resultados-reinado-2026.csv";
+    link.click();
+    URL.revokeObjectURL(link.href);
+  }
+
   return (
     <section>
-      <SectionHeading eyebrow="CONTEO PRIVADO" title="Resultados" aside={<Button className="button--ghost">Exportar CSV</Button>} />
+      <SectionHeading eyebrow="CONTEO PRIVADO" title="Resultados" aside={<Button className="button--ghost" onClick={exportResults}>Exportar CSV</Button>} />
+      <div className="stats-grid results-stats">
+        <Stat icon="✓" label="Votos registrados" value={String(totalVotes)} note="Conteo en tiempo real" />
+        <Stat icon="◇" label="Códigos emitidos" value={String(issuedCodes)} note={`${Math.max(issuedCodes - totalVotes, 0)} disponibles o anulados`} />
+        <Stat icon="↗" label="Participación" value={`${issuedCodes ? Math.round((totalVotes / issuedCodes) * 100) : 0}%`} note="Votos / códigos emitidos" />
+      </div>
       <div className="panel">
-        <EmptyState icon="▥" title="Aún no hay votos" body="Los resultados aparecerán aquí cuando abras la votación y se registre el primer voto." />
-        <div className="result-preview">{candidates.map((candidate) => <div key={candidate.id}><span>{candidate.nombre_completo}</span><div><i style={{ width: "0%" }} /></div><strong>0</strong></div>)}</div>
+        {totalVotes === 0 && <EmptyState icon="▥" title="Aún no hay votos" body="Los resultados aparecerán aquí cuando abras la votación y se registre el primer voto." />}
+        <div className="result-preview">{candidates.map((candidate) => {
+          const votes = counts[candidate.id] ?? 0;
+          const percentage = totalVotes ? (votes / totalVotes) * 100 : 0;
+          return <div key={candidate.id}><span>{candidate.nombre_completo}</span><div><i style={{ width: `${percentage}%` }} /></div><strong>{votes}</strong></div>;
+        })}</div>
       </div>
     </section>
   );
