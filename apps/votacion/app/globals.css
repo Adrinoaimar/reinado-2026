@@ -66,6 +66,7 @@ h1, h2, h3 { font-family: Georgia, "Times New Roman", serif; font-weight: 400; l
 .ornament--left { left: 6%; }.ornament--right { right: 6%; }
 
 .candidates-section { padding: 91px 24px 105px; background:
+  linear-gradient(var(--night), var(--cream) 220px),
   radial-gradient(circle at 50% 0, rgba(214,170,75,.09), transparent 20%),
   var(--cream);
 }
@@ -78,6 +79,10 @@ h1, h2, h3 { font-family: Georgia, "Times New Roman", serif; font-weight: 400; l
 .candidate-card:nth-child(even) .candidate-card__portrait { order: 2; }
 .candidate-card__portrait { position: relative; min-height: 330px; overflow: hidden; }
 .candidate-card__portrait img { width: 100%; height: 100%; object-fit: cover; }
+.candidate-card__portrait:has(img)::after { content: ""; position: absolute; inset: 0; pointer-events: none; background:
+  linear-gradient(155deg, rgba(10,22,40,.32), transparent 45% 55%, rgba(117,31,63,.22)),
+  linear-gradient(0deg, rgba(5,12,24,.4), transparent 38%); mix-blend-mode: multiply; }
+.candidate-card__portrait:has(img)::before { content: ""; position: absolute; inset: 0; z-index: 1; pointer-events: none; box-shadow: inset 0 0 0 1px rgba(214,170,75,.25); }
 .candidate-card__portrait video { width: 100%; height: 100%; object-fit: cover; background: #050c18; }
 .generated-portrait { display: grid; place-items: center; color: rgba(255,255,255,.68); background: linear-gradient(145deg, #aa7962, #293c54 55%, #111b2c); }
 .generated-portrait--2 { background: linear-gradient(145deg, #d0a18d, #73314b 55%, #161526); }
