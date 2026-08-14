@@ -22,3 +22,5 @@ entregables/codigos-*.pdf
 supabase/.temp/
 .DS_Store
 Thumbs.db
+fotos-candidatas/*/*
+!fotos-candidatas/*/.gitkeep
