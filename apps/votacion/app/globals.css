@@ -70,6 +70,11 @@ button:focus-visible, a:focus-visible, input:focus-visible, [tabindex]:focus-vis
 .hero::after { content: ""; position: absolute; inset: 80px 40px 28px; border: 1px solid rgba(214,170,75,.22); border-radius: 240px 240px 30px 30px; box-shadow: inset 0 0 80px rgba(214,170,75,.025), 0 0 60px rgba(214,170,75,.035); }
 .hero__content { position: relative; z-index: 2; max-width: 700px; padding: 120px 25px 80px; }
 .gold-kicker { margin: 0 0 14px; color: var(--gold); font-size: 9px; font-weight: 750; letter-spacing: .28em; text-transform: uppercase; }
+.anniversary-counter { position: relative; display: inline-flex; align-items: center; gap: 10px; min-width: 132px; margin: 0 auto 11px; border: 1px solid rgba(242,213,130,.45); border-radius: 22px 7px 22px 7px; padding: 6px 14px 6px 10px; color: var(--gold-bright); background: linear-gradient(135deg, rgba(255,255,255,.1), rgba(8,20,37,.7)); box-shadow: inset 0 1px 0 rgba(255,255,255,.14), 0 12px 34px rgba(0,0,0,.25); -webkit-backdrop-filter: blur(16px) saturate(1.2); backdrop-filter: blur(16px) saturate(1.2); transform-origin: center; }
+.anniversary-counter::before { content: ""; position: absolute; inset: 4px; border: 1px solid rgba(242,213,130,.18); border-radius: 17px 4px 17px 4px; pointer-events: none; }
+.anniversary-counter strong { min-width: 43px; font-family: Georgia, serif; font-size: 33px; font-weight: 400; line-height: 1; text-align: center; }
+.anniversary-counter span { color: #d9c792; font-size: 7px; font-weight: 800; letter-spacing: .2em; }
+.anniversary-counter.is-complete { border-color: var(--gold-bright); color: #fff1b8; background: linear-gradient(135deg, rgba(242,213,130,.2), rgba(20,31,47,.76)); box-shadow: inset 0 1px 0 rgba(255,255,255,.22), 0 0 28px rgba(214,170,75,.22), 0 15px 38px rgba(0,0,0,.28); }
 .hero-crown { display: block; margin-bottom: 5px; color: var(--gold-bright); font-size: 36px; filter: drop-shadow(0 0 16px rgba(242,213,130,.35)); animation: crown-float 4.5s ease-in-out infinite; }
 .hero h1 { margin: 0 0 18px; font-size: clamp(58px, 8vw, 92px); line-height: .91; }
 .hero h1 em { color: var(--gold); font-weight: 400; }
@@ -88,11 +93,6 @@ button:focus-visible, a:focus-visible, input:focus-visible, [tabindex]:focus-vis
 .countdown strong, .countdown small { display: block; }
 .countdown strong { color: #fff; font-family: Georgia, serif; font-size: 22px; font-weight: 400; }
 .countdown small { margin-top: 3px; color: #8f9baa; font-size: 7px; letter-spacing: .12em; text-transform: uppercase; }
-.hero__seal { position: absolute; right: 7%; bottom: 8%; z-index: 2; display: grid; place-items: center; width: 68px; height: 68px; border: 1px solid rgba(214,170,75,.36); border-radius: 50%; color: var(--gold); transform: rotate(8deg); }
-.hero__seal::before { content: ""; position: absolute; inset: 5px; border: 1px dashed rgba(214,170,75,.3); border-radius: 50%; }
-.hero__seal span, .hero__seal small { position: relative; display: block; }
-.hero__seal span { font-family: Georgia, serif; font-size: 17px; }
-.hero__seal small { font-size: 6px; letter-spacing: .18em; }
 .ornament { position: absolute; top: 50%; z-index: 2; color: rgba(214,170,75,.35); font-size: 15px; }
 .ornament--left { left: 6%; }.ornament--right { right: 6%; }
 
@@ -103,6 +103,14 @@ button:focus-visible, a:focus-visible, input:focus-visible, [tabindex]:focus-vis
 }
 .candidates-section::before { content: "♛"; position: absolute; right: -68px; top: 17%; color: rgba(214,170,75,.045); font-family: Georgia, serif; font-size: 270px; transform: rotate(12deg); }
 .candidates-section::after { content: ""; position: absolute; inset: 0; pointer-events: none; background-image: radial-gradient(circle, rgba(242,213,130,.11) 0 1px, transparent 1.5px); background-size: 78px 78px; mask-image: linear-gradient(90deg, #000, transparent 24% 76%, #000); }
+.falling-royal-lines { position: absolute; inset: 0; z-index: 0; overflow: hidden; pointer-events: none; }
+.royal-trace { position: absolute; top: -320px; width: 112px; height: 300px; opacity: 0; overflow: visible; animation: royal-trace-fall var(--trace-duration, 13s) linear var(--trace-delay, 0s) infinite; will-change: transform, opacity; }
+.royal-trace path { fill: none; stroke: rgba(242,213,130,.34); stroke-width: 1.2; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 520; stroke-dashoffset: 520; vector-effect: non-scaling-stroke; animation: royal-trace-draw 4.2s ease-in-out var(--trace-delay, 0s) infinite; }
+.royal-trace--one { left: 4%; --trace-duration: 13s; --trace-delay: -7s; }
+.royal-trace--two { left: 25%; width: 86px; --trace-duration: 16s; --trace-delay: -12s; }
+.royal-trace--three { right: 43%; width: 94px; --trace-duration: 14s; --trace-delay: -2s; }
+.royal-trace--four { right: 20%; width: 118px; --trace-duration: 17s; --trace-delay: -9s; }
+.royal-trace--five { right: 3%; width: 82px; --trace-duration: 12s; --trace-delay: -5s; }
 .section-crown { position: relative; z-index: 1; display: flex; align-items: center; justify-content: center; gap: 17px; margin-bottom: 20px; color: rgba(242,213,130,.55); }
 .section-crown::before, .section-crown::after { content: ""; width: min(90px, 16vw); height: 1px; background: linear-gradient(90deg, transparent, rgba(214,170,75,.5)); }
 .section-crown::after { transform: scaleX(-1); }
@@ -220,6 +228,8 @@ footer > p { text-align: center; } footer > small { text-align: right; }
 .secure-caption { margin: 13px 0 0; color: #a09e98; font-size: 7px; text-transform: uppercase; letter-spacing: .08em; }
 
 @keyframes crown-float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-7px); } }
+@keyframes royal-trace-fall { 0% { opacity: 0; transform: translate3d(0, -80px, 0); } 10% { opacity: .22; } 68% { opacity: .3; } 100% { opacity: 0; transform: translate3d(0, 5200px, 0); } }
+@keyframes royal-trace-draw { 0%, 10% { stroke-dashoffset: 520; } 48%, 72% { stroke-dashoffset: 0; } 100% { stroke-dashoffset: -520; } }
 
 @media (max-width: 720px) {
   .public-header { height: 70px; padding: 0 18px; }
@@ -230,7 +240,8 @@ footer > p { text-align: center; } footer > small { text-align: right; }
   .hero { min-height: 650px; }
   .hero::after { inset: 70px 13px 22px; }
   .hero h1 { font-size: 58px; }
-  .hero__seal, .ornament { display: none; }
+  .ornament { display: none; }
+  .anniversary-counter { margin-bottom: 9px; transform-origin: center; }
   .candidates-section { padding: 78px 15px 88px; }
   .section-intro h2 { font-size: 36px; }
   .candidate-stack { gap: 25px; }
@@ -267,4 +278,7 @@ footer > p { text-align: center; } footer > small { text-align: right; }
   html { scroll-behavior: auto; }
   *, *::before, *::after { animation-duration: .01ms !important; transition: none !important; }
   .royal-scroll-progress { display: none; }
+  .royal-trace { top: 8%; opacity: .11; animation: none !important; }
+  .royal-trace:nth-child(even) { top: 48%; }
+  .royal-trace path { stroke-dashoffset: 0; animation: none !important; }
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import confetti from "canvas-confetti";
-import { AnimatePresence, motion, useReducedMotion, useScroll, useSpring, useTransform } from "framer-motion";
+import { AnimatePresence, animate, motion, useReducedMotion, useScroll, useSpring, useTransform } from "framer-motion";
 import Image from "next/image";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getSupabaseBrowserClient, isSupabaseConfigured } from "@reinado/supabase-client";
@@ -131,6 +131,7 @@ export function VotingExperience() {
         <div className="ornament ornament--left">✦</div><div className="ornament ornament--right">✦</div>
         <motion.div className="hero__content" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: .7 }}>
           <p className="gold-kicker">UNA NOCHE · UNA CORONA · TU ELECCIÓN</p>
+          <AnniversaryCounter />
           <span className="hero-crown">♛</span>
           <h1>Tu voto.<br/><em>Tu reina.</em></h1>
           <p className="hero__lead">Conoce sus historias, descubre lo que representan y elige a quien llevará la corona.</p>
@@ -146,10 +147,10 @@ export function VotingExperience() {
             <div className="hero-status"><span>◷</span><div><strong>{phase === "finished" ? "La votación ha finalizado" : "La votación está cerrada"}</strong><small>{phaseMessage}</small></div></div>
           )}
         </motion.div>
-        <div className="hero__seal"><span>2026</span><small>EDICIÓN</small></div>
       </section>
 
       <section className="candidates-section" id="candidatas">
+        <FallingRoyalLines />
         <div className="section-crown" aria-hidden="true"><span>✦</span><strong>♛</strong><span>✦</span></div>
         <motion.div className="section-intro" initial={{ opacity: 0, y: 24 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, margin: "-15%" }} transition={{ duration: .65 }}>
           <p className="gold-kicker">ELLAS INSPIRAN</p>
@@ -223,6 +224,64 @@ function RoyalBackdrop() {
       <span className="royal-glyph royal-glyph--diamond">◇</span>
       <span className="royal-laurel royal-laurel--left">❧</span>
       <span className="royal-laurel royal-laurel--right">❧</span>
+    </div>
+  );
+}
+
+function AnniversaryCounter() {
+  const reduced = useReducedMotion();
+  const [count, setCount] = useState(0);
+  const [complete, setComplete] = useState(false);
+
+  useEffect(() => {
+    if (reduced) {
+      const frame = window.requestAnimationFrame(() => {
+        setCount(28);
+        setComplete(true);
+      });
+      return () => window.cancelAnimationFrame(frame);
+    }
+    const controls = animate(0, 28, {
+      delay: .2,
+      duration: 1.05,
+      ease: "easeOut",
+      onUpdate: (value) => setCount(Math.round(value)),
+      onComplete: () => setComplete(true)
+    });
+    return () => controls.stop();
+  }, [reduced]);
+
+  return (
+    <motion.div
+      className={`anniversary-counter${complete ? " is-complete" : ""}`}
+      aria-label="28 aniversario"
+      animate={complete && !reduced ? { scale: [1, 1.24, 1.05], filter: ["drop-shadow(0 0 0 rgba(242,213,130,0))", "drop-shadow(0 0 24px rgba(242,213,130,.9))", "drop-shadow(0 0 13px rgba(242,213,130,.58))"] } : { scale: 1 }}
+      transition={{ duration: .58, ease: "easeOut" }}
+    >
+      <strong aria-hidden="true">{count}</strong>
+      <span aria-hidden="true">ANIVERSARIO</span>
+    </motion.div>
+  );
+}
+
+function FallingRoyalLines() {
+  return (
+    <div className="falling-royal-lines" aria-hidden="true">
+      <svg className="royal-trace royal-trace--one" viewBox="0 0 150 300">
+        <path d="M75 0V118M24 170l15 55 36-42 36 42 15-55-27 20-24-49-24 49-27-20Zm15 55h72v17H39Z" />
+      </svg>
+      <svg className="royal-trace royal-trace--two" viewBox="0 0 150 300">
+        <path d="M75 0v116m0 17 37 37-37 37-37-37 37-37Zm0 74v62m-31-31h62" />
+      </svg>
+      <svg className="royal-trace royal-trace--three" viewBox="0 0 150 300">
+        <path d="M75 0v106m0 28c8 18 23 29 43 33-16 8-27 22-31 42-8-17-22-28-42-33 17-8 28-22 30-42Zm-47 98 10 10m84-10-10 10" />
+      </svg>
+      <svg className="royal-trace royal-trace--four" viewBox="0 0 150 300">
+        <path d="M75 0v120M28 169c16 8 28 23 34 44 7-20 17-34 31-43 7 15 18 27 33 36M37 225c26 14 52 14 78 0M48 246h59" />
+      </svg>
+      <svg className="royal-trace royal-trace--five" viewBox="0 0 150 300">
+        <path d="M75 0v112m-43 67 18 45 25-38 25 38 18-45-26 15-17-43-17 43-26-15Zm18 45h50" />
+      </svg>
     </div>
   );
 }

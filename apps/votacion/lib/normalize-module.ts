@@ -76,32 +76,30 @@ function parseNumber(value: string) {
   return NUMBER_WORDS[stripAccents(value)] ?? fromRoman(value);
 }
 
-function preserveModuleCase(value: string) {
-  if (value === value.toUpperCase()) return "MÓDULO";
-  if (value[0] === value[0]?.toUpperCase()) return "Módulo";
-  return "módulo";
-}
-
 const WORD = "[A-Za-zÁÉÍÓÚÜÑáéíóúüñ]+";
 
 export function normalizeModuleReferences(value: string) {
-  const numberBeforeModule = new RegExp(`\\b(\\d{1,3})(?:er|ro|do|to)?\\s+(m[oó]dulo)\\b`, "gi");
-  const wordBeforeModule = new RegExp(`\\b(${WORD})\\s+(m[oó]dulo)\\b`, "gi");
-  const numberAfterModule = new RegExp(`\\b(m[oó]dulo)(?:\\s+(?:n[úu]mero|nro\\.?|n[°º]))?\\s*[:#-]?\\s*(\\d{1,3}|${WORD})\\b`, "gi");
+  const numberBeforeModule = new RegExp(`\\b(\\d{1,3})(?:er|ro|do|to)?\\s+(?:m[oó]dulo)\\b`, "gi");
+  const wordBeforeModule = new RegExp(`\\b(${WORD})\\s+(?:m[oó]dulo)\\b`, "gi");
+  const numberAfterModule = new RegExp(`\\b(?:m[oó]dulo)(?:\\s+(?:n[úu]mero|nro\\.?|n[°º]))?\\s*[:#-]?\\s*(\\d{1,3}|${WORD})\\b`, "gi");
 
   return value
-    .replace(numberBeforeModule, (match, number: string, moduleWord: string) => {
+    .replace(numberBeforeModule, (match, number: string) => {
       const roman = toRoman(Number(number));
-      return roman ? `${preserveModuleCase(moduleWord)} ${roman}` : match;
+      return roman ? roman : match;
     })
-    .replace(wordBeforeModule, (match, word: string, moduleWord: string) => {
+    .replace(wordBeforeModule, (match, word: string) => {
       const number = parseNumber(word);
       const roman = number ? toRoman(number) : null;
-      return roman ? `${preserveModuleCase(moduleWord)} ${roman}` : match;
+      return roman ? roman : match;
     })
-    .replace(numberAfterModule, (match, moduleWord: string, rawNumber: string) => {
+    .replace(numberAfterModule, (match, rawNumber: string) => {
       const number = parseNumber(rawNumber);
       const roman = number ? toRoman(number) : null;
-      return roman ? `${preserveModuleCase(moduleWord)} ${roman}` : match;
-    });
+      return roman ? roman : match;
+    })
+    .replace(/\bm[oó]dulo\b/gi, "")
+    .replace(/\s{2,}/g, " ")
+    .replace(/\s+([.,;:])/g, "$1")
+    .trim();
 }

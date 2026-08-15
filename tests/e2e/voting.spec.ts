@@ -3,6 +3,8 @@ import { expect, test } from "@playwright/test";
 test("public voting experience is accessible and closed by default", async ({ page }) => {
   await page.goto("/");
   await expect(page.getByRole("heading", { name: /Tu voto/i })).toBeVisible();
+  await expect(page.getByLabel("28 aniversario")).toBeVisible();
+  await expect(page.locator(".anniversary-counter strong")).toHaveText("28");
   await expect(page.getByText("La votación está cerrada", { exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Conoce a las candidatas" })).toBeVisible();
 });
@@ -37,6 +39,8 @@ test("royal theme renders scroll ornament and brighter candidate hover", async (
   test.skip(testInfo.project.name === "mobile-chrome", "Hover is a desktop interaction.");
   await page.goto("/");
   await expect(page.locator(".royal-scroll-progress")).toBeVisible();
+  await expect(page.locator(".royal-trace")).toHaveCount(5);
+  await expect.poll(() => page.locator(".royal-trace").first().evaluate((element) => getComputedStyle(element).animationName)).toContain("royal-trace-fall");
   const card = page.locator(".candidate-card").first();
   await expect.poll(() => card.evaluate((element) => getComputedStyle(element).borderRadius)).not.toBe("0px");
   await expect.poll(() => card.evaluate((element) => getComputedStyle(element).backdropFilter)).not.toBe("none");
