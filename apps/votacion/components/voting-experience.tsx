@@ -7,6 +7,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getSupabaseBrowserClient, isSupabaseConfigured } from "@reinado/supabase-client";
 import type { Candidate, VoteResponse, VotingConfig } from "@reinado/types";
 import { getVotingPhase } from "@reinado/validation";
+import { normalizeModuleReferences } from "../lib/normalize-module";
 
 const demoCandidates: Candidate[] = [
   { id: "86291858-b6be-4dce-b38e-ce902bc68531", nombre_completo: "Valentina Reyes", apodo_o_titulo: "La voz de la costa", edad: 21, descripcion: "Creo en el poder de la cultura para transformar comunidades. Mi propósito es abrir más espacios donde el arte, la memoria y el talento joven puedan encontrarse.", foto_principal_url: null, galeria_urls: [], video_url: null, video_poster_url: null, representa_a: "Sede Central", orden: 1, activa: true },
@@ -257,14 +258,16 @@ function Countdown({ target, now }: { target: string; now: Date }) {
 
 function CandidateCard({ candidate, index, canVote, onProfile, onVote }: { candidate: Candidate; index: number; canVote: boolean; onProfile: (candidate: Candidate, trigger: HTMLButtonElement) => void; onVote: (candidate: Candidate) => void }) {
   const reduced = useReducedMotion();
+  const representation = normalizeModuleReferences(candidate.representa_a);
+  const description = normalizeModuleReferences(candidate.descripcion);
   return (
     <motion.article className="candidate-card" initial={reduced ? false : { opacity: 0, y: 28 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, margin: "-10%" }} transition={{ delay: index * .08 }}>
       <Portrait candidate={candidate} index={index} />
       <div className="candidate-card__content">
-        <p className="gold-kicker">{candidate.representa_a}</p>
+        <p className="gold-kicker">{representation}</p>
         <h3>{candidate.nombre_completo}</h3>
         <em>{candidate.apodo_o_titulo}</em>
-        <p>{candidate.descripcion}</p>
+        <p>{description}</p>
         <div className="candidate-card__actions"><button className="text-button" onClick={(event) => onProfile(candidate, event.currentTarget)}>Ver su historia <span>→</span></button>{canVote && <button className="vote-icon" aria-label={`Votar por ${candidate.nombre_completo}`} onClick={() => onVote(candidate)}>♛</button>}</div>
       </div>
       <span className="candidate-number">0{index + 1}</span>
@@ -272,10 +275,11 @@ function CandidateCard({ candidate, index, canVote, onProfile, onVote }: { candi
   );
 }
 
-function Portrait({ candidate, index, previewVideo = true }: { candidate: Candidate; index: number; previewVideo?: boolean }) {
+function Portrait({ candidate, index, previewVideo = true, profile = false }: { candidate: Candidate; index: number; previewVideo?: boolean; profile?: boolean }) {
+  const portraitClass = `candidate-card__portrait${profile ? " candidate-card__portrait--profile" : ""}`;
   if (candidate.video_url && previewVideo) return <VideoPreview candidate={candidate} />;
-  if (candidate.foto_principal_url) return <div className="candidate-card__portrait"><Image src={candidate.foto_principal_url} alt={candidate.nombre_completo} fill sizes="(max-width: 720px) 100vw, 420px" style={{ objectFit: "cover" }} /></div>;
-  return <div className={`candidate-card__portrait generated-portrait generated-portrait--${(index % 3) + 1}`} role="img" aria-label={`Retrato decorativo de ${candidate.nombre_completo}`}><div className="portrait-silhouette" /><span>{candidate.nombre_completo.split(" ").map((part) => part[0]).slice(0, 2).join("")}</span></div>;
+  if (candidate.foto_principal_url) return <div className={portraitClass}><Image src={candidate.foto_principal_url} alt={candidate.nombre_completo} fill sizes="(max-width: 720px) 100vw, 440px" style={{ objectFit: "cover" }} /></div>;
+  return <div className={`${portraitClass} generated-portrait generated-portrait--${(index % 3) + 1}`} role="img" aria-label={`Retrato decorativo de ${candidate.nombre_completo}`}><div className="portrait-silhouette" /><span>{candidate.nombre_completo.split(" ").map((part) => part[0]).slice(0, 2).join("")}</span></div>;
 }
 
 function VideoPreview({ candidate }: { candidate: Candidate }) {
@@ -352,6 +356,8 @@ function useDialogFocus(containerRef: React.RefObject<HTMLElement | null>, onClo
 function ProfileModal({ candidate, canVote, returnFocusTarget, onClose, onVote }: { candidate: Candidate; canVote: boolean; returnFocusTarget: HTMLElement | null; onClose: () => void; onVote: () => void }) {
   const dialogRef = useRef<HTMLElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
+  const representation = normalizeModuleReferences(candidate.representa_a);
+  const description = normalizeModuleReferences(candidate.descripcion);
   useDialogFocus(dialogRef, onClose, false, returnFocusTarget);
 
   return (
@@ -359,11 +365,11 @@ function ProfileModal({ candidate, canVote, returnFocusTarget, onClose, onVote }
       <motion.article ref={dialogRef} className="profile-modal" role="dialog" aria-modal="true" aria-labelledby="profile-dialog-title" tabIndex={-1} initial={{ scale: .96, y: 24 }} animate={{ scale: 1, y: 0 }} exit={{ scale: .96 }} onAnimationComplete={() => closeButtonRef.current?.focus()} onMouseDown={(event) => event.stopPropagation()}>
         <button ref={closeButtonRef} className="close-button" onClick={onClose} aria-label="Cerrar" autoFocus>×</button>
         <div className="profile-modal__media">
-          <Portrait candidate={candidate} index={0} previewVideo={false} />
+          <Portrait candidate={candidate} index={0} previewVideo={false} profile />
           {candidate.video_url && <video className="profile-video" src={candidate.video_url} poster={candidate.video_poster_url ?? candidate.foto_principal_url ?? undefined} controls playsInline preload="metadata" aria-label={`Video completo de ${candidate.nombre_completo}`} />}
           {candidate.galeria_urls.length > 0 && <div className="profile-gallery">{candidate.galeria_urls.map((url, index) => <Image key={url} src={url} alt={`${candidate.nombre_completo}, fotografía ${index + 1}`} width={220} height={150} sizes="(max-width: 720px) 42vw, 180px" />)}</div>}
         </div>
-        <div className="profile-modal__content"><p className="gold-kicker">{candidate.representa_a}</p><h2 id="profile-dialog-title">{candidate.nombre_completo}</h2><em>{candidate.apodo_o_titulo}</em><blockquote>“{candidate.descripcion}”</blockquote><div className="profile-tags"><span>Propósito</span><span>Comunidad</span><span>Talento</span></div>{canVote && <button className="royal-button" onClick={onVote}>Votar por ella ♛</button>}</div>
+        <div className="profile-modal__content"><p className="gold-kicker">{representation}</p><h2 id="profile-dialog-title">{candidate.nombre_completo}</h2><em>{candidate.apodo_o_titulo}</em><blockquote>“{description}”</blockquote><div className="profile-tags"><span>Propósito</span><span>Comunidad</span><span>Talento</span></div>{canVote && <button className="royal-button" onClick={onVote}>Votar por ella ♛</button>}</div>
       </motion.article>
     </motion.div>
   );
