@@ -90,12 +90,16 @@ Deno.serve(async (request: Request) => {
     return json({ ok: false, code: "CODIGO_INVALIDO", message: "No pudimos verificar que seas una persona. Inténtalo otra vez." }, 400);
   }
 
-  const provider = userData.user.app_metadata?.provider;
   const isAnonymous = userData.user.is_anonymous === true;
+  const provider = userData.user.app_metadata?.provider;
+  const hasGoogleIdentity = userData.user.identities?.some(
+    (identity) => identity.provider === "google",
+  ) ?? false;
+  const isGoogleUser = !isAnonymous && (provider === "google" || hasGoogleIdentity);
   const { data: config } = await admin.from("configuracion_votacion")
     .select("modo_acceso, google_login_activo, dominio_correo_permitido")
     .eq("id", 1).single();
-  if (config?.modo_acceso !== "codigo" && (isAnonymous || provider !== "google")) {
+  if (config?.modo_acceso !== "codigo" && !isGoogleUser) {
     return json({ ok: false, code: "NO_AUTORIZADO", message: "Este evento requiere iniciar sesión con Google." }, 401);
   }
   const email = userData.user.email ?? null;
