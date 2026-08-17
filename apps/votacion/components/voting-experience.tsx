@@ -42,6 +42,16 @@ export function VotingExperience() {
   useEffect(() => {
     if (!configured) return;
     const client = getSupabaseBrowserClient();
+    let active = true;
+    const applySession = (session: Awaited<ReturnType<typeof client.auth.getSession>>["data"]["session"]) => {
+      if (!active) return;
+      const user = session?.user;
+      setAccess(user?.app_metadata?.provider === "google" && !user.is_anonymous ? "google" : user ? "anonymous" : "none");
+    };
+    const { data: authListener } = client.auth.onAuthStateChange((_event, session) => {
+      applySession(session);
+    });
+
     void (async () => {
       const [candidateResult, configResult] = await Promise.all([
         client.from("candidatas").select("*").eq("activa", true).order("orden"),
@@ -56,7 +66,7 @@ export function VotingExperience() {
         sessionData = { session: signedIn.data.session };
       }
       const user = sessionData.session?.user;
-      setAccess(user?.app_metadata?.provider === "google" && !user.is_anonymous ? "google" : user ? "anonymous" : "none");
+      applySession(sessionData.session);
       const voteResult = user ? await client.from("votos").select("id").limit(1) : { data: null };
       if (voteResult.data?.length) {
         setHasVoted(true);
@@ -69,6 +79,11 @@ export function VotingExperience() {
       }
       setLoading(false);
     })();
+
+    return () => {
+      active = false;
+      authListener.subscription.unsubscribe();
+    };
   }, [configured]);
 
   useEffect(() => {
