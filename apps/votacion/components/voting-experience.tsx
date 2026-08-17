@@ -1,12 +1,13 @@
 "use client";
 
 import confetti from "canvas-confetti";
-import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import { AnimatePresence, animate, motion, useReducedMotion, useScroll, useSpring, useTransform } from "framer-motion";
 import Image from "next/image";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getSupabaseBrowserClient, isSupabaseConfigured } from "@reinado/supabase-client";
 import type { Candidate, VoteResponse, VotingConfig } from "@reinado/types";
 import { getVotingPhase } from "@reinado/validation";
+import { normalizeModuleReferences } from "../lib/normalize-module";
 
 const demoCandidates: Candidate[] = [
   { id: "86291858-b6be-4dce-b38e-ce902bc68531", nombre_completo: "Valentina Reyes", apodo_o_titulo: "La voz de la costa", edad: 21, descripcion: "Creo en el poder de la cultura para transformar comunidades. Mi propósito es abrir más espacios donde el arte, la memoria y el talento joven puedan encontrarse.", foto_principal_url: null, galeria_urls: [], video_url: null, video_poster_url: null, representa_a: "Sede Central", orden: 1, activa: true },
@@ -29,6 +30,7 @@ export function VotingExperience() {
   const [config, setConfig] = useState<VotingConfig>(demoConfig);
   const [selected, setSelected] = useState<Candidate | null>(null);
   const [profile, setProfile] = useState<Candidate | null>(null);
+  const [profileTrigger, setProfileTrigger] = useState<HTMLButtonElement | null>(null);
   const configured = isSupabaseConfigured();
   const [hasVoted, setHasVoted] = useState(() => typeof window !== "undefined" && localStorage.getItem("reinado:voted") === "true");
   const [loading, setLoading] = useState(configured);
@@ -92,6 +94,21 @@ export function VotingExperience() {
   const requiresGoogle = config.google_login_activo && (config.modo_acceso === "google" || config.modo_acceso === "google_codigo");
   const accessReady = !requiresGoogle || access === "google";
   const phaseMessage = phase === "finished" ? config.mensaje_despues : config.mensaje_antes;
+  const closeProfile = useCallback(() => setProfile(null), []);
+  const closeVote = useCallback(() => setSelected(null), []);
+  const voteFromProfile = useCallback(() => {
+    if (!profile) return;
+    setSelected(profile);
+    setProfile(null);
+  }, [profile]);
+  const completeVote = useCallback(() => {
+    setHasVoted(true);
+    setSelected(null);
+  }, []);
+  const openProfile = useCallback((candidate: Candidate, trigger: HTMLButtonElement) => {
+    setProfileTrigger(trigger);
+    setProfile(candidate);
+  }, []);
 
   async function signInWithGoogle() {
     if (!configured) return;
@@ -103,6 +120,8 @@ export function VotingExperience() {
 
   return (
     <main className="public-shell" style={{ "--event-gold": config.color_primario, "--event-accent": config.color_acento } as React.CSSProperties}>
+      <RoyalBackdrop />
+      <RoyalScrollProgress />
       <header className="public-header">
         <a href="#inicio" className="public-brand"><span>♛</span><div><strong>{config.nombre_evento.toUpperCase()}</strong><small>MMXXVI</small></div></a>
         <nav><a href="#candidatas">Candidatas</a><a href="#como-votar">Cómo votar</a><span className={`live-pill ${phase === "open" ? "is-live" : ""}`}>{phase === "open" ? "Votación abierta" : "Votación cerrada"}</span></nav>
@@ -112,6 +131,7 @@ export function VotingExperience() {
         <div className="ornament ornament--left">✦</div><div className="ornament ornament--right">✦</div>
         <motion.div className="hero__content" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: .7 }}>
           <p className="gold-kicker">UNA NOCHE · UNA CORONA · TU ELECCIÓN</p>
+          <AnniversaryCounter />
           <span className="hero-crown">♛</span>
           <h1>Tu voto.<br/><em>Tu reina.</em></h1>
           <p className="hero__lead">Conoce sus historias, descubre lo que representan y elige a quien llevará la corona.</p>
@@ -127,15 +147,16 @@ export function VotingExperience() {
             <div className="hero-status"><span>◷</span><div><strong>{phase === "finished" ? "La votación ha finalizado" : "La votación está cerrada"}</strong><small>{phaseMessage}</small></div></div>
           )}
         </motion.div>
-        <div className="hero__seal"><span>2026</span><small>EDICIÓN</small></div>
       </section>
 
       <section className="candidates-section" id="candidatas">
-        <div className="section-intro">
+        <FallingRoyalLines />
+        <div className="section-crown" aria-hidden="true"><span>✦</span><strong>♛</strong><span>✦</span></div>
+        <motion.div className="section-intro" initial={{ opacity: 0, y: 24 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, margin: "-15%" }} transition={{ duration: .65 }}>
           <p className="gold-kicker">ELLAS INSPIRAN</p>
           <h2>Conoce a las candidatas</h2>
           <p>Cada historia merece ser escuchada. Abre un perfil para conocer su esencia.</p>
-        </div>
+        </motion.div>
         {loading ? <div className="candidate-stack"><div className="candidate-card skeleton" /></div> : phase === "open" && requiresGoogle && !accessReady ? (
           <div className="access-gate">
             <span>G</span>
@@ -152,7 +173,7 @@ export function VotingExperience() {
         ) : (
           <div className="candidate-stack">
             {candidates.map((candidate, index) => (
-              <CandidateCard key={candidate.id} candidate={candidate} index={index} canVote={phase === "open" && !hasVoted && accessReady} onProfile={setProfile} onVote={setSelected} />
+              <CandidateCard key={candidate.id} candidate={candidate} index={index} canVote={phase === "open" && !hasVoted && accessReady} onProfile={openProfile} onVote={setSelected} />
             ))}
           </div>
         )}
@@ -176,22 +197,110 @@ export function VotingExperience() {
       )}
 
       <section className="how-section" id="como-votar">
-        <div className="section-intro section-intro--light"><p className="gold-kicker">SIMPLE Y SEGURO</p><h2>Tu elección en tres pasos</h2></div>
-        <div className="steps">
-          <article><span>01</span><i>♛</i><h3>Conoce</h3><p>Explora los perfiles, historias y propuestas de cada candidata.</p></article>
-          <article><span>02</span><i>◇</i><h3>Elige</h3><p>Decide con calma. Tu voto es único y definitivo.</p></article>
-          <article><span>03</span><i>✓</i><h3>Confirma</h3><p>Ingresa el código que recibiste y confirma de forma segura.</p></article>
-        </div>
+        <motion.div className="section-intro section-intro--light" initial={{ opacity: 0, y: 24 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, margin: "-15%" }} transition={{ duration: .65 }}><p className="gold-kicker">SIMPLE Y SEGURO</p><h2>Tu elección en tres pasos</h2></motion.div>
+        <motion.div className="steps" initial="hidden" whileInView="visible" viewport={{ once: true, margin: "-10%" }} variants={{ hidden: {}, visible: { transition: { staggerChildren: .14 } } }}>
+          <motion.article variants={{ hidden: { opacity: 0, y: 24 }, visible: { opacity: 1, y: 0 } }}><span>01</span><i>♛</i><h3>Conoce</h3><p>Explora los perfiles, historias y propuestas de cada candidata.</p></motion.article>
+          <motion.article variants={{ hidden: { opacity: 0, y: 24 }, visible: { opacity: 1, y: 0 } }}><span>02</span><i>◇</i><h3>Elige</h3><p>Decide con calma. Tu voto es único y definitivo.</p></motion.article>
+          <motion.article variants={{ hidden: { opacity: 0, y: 24 }, visible: { opacity: 1, y: 0 } }}><span>03</span><i>✓</i><h3>Confirma</h3><p>Ingresa el código que recibiste y confirma de forma segura.</p></motion.article>
+        </motion.div>
         <p className="privacy-note">◉ Tu código se usa una sola vez. No almacenamos tu IP visible.</p>
       </section>
 
       <footer><div className="public-brand"><span>♛</span><div><strong>{config.nombre_evento.toUpperCase()}</strong><small>MMXXVI</small></div></div><p>Una celebración de talento, propósito y comunidad.</p><small>Votación protegida con código único y Cloudflare Turnstile.</small></footer>
 
       <AnimatePresence>
-        {profile && <ProfileModal candidate={profile} canVote={phase === "open" && !hasVoted && accessReady} onClose={() => setProfile(null)} onVote={() => { setSelected(profile); setProfile(null); }} />}
-        {selected && <VoteModal candidate={selected} configured={configured} requiresCode={config.modo_acceso !== "google"} onClose={() => setSelected(null)} onSuccess={() => { setHasVoted(true); setSelected(null); }} />}
+        {profile && <ProfileModal candidate={profile} canVote={phase === "open" && !hasVoted && accessReady} returnFocusTarget={profileTrigger} onClose={closeProfile} onVote={voteFromProfile} />}
+        {selected && <VoteModal candidate={selected} configured={configured} requiresCode={config.modo_acceso !== "google"} onClose={closeVote} onSuccess={completeVote} />}
       </AnimatePresence>
     </main>
+  );
+}
+
+function RoyalBackdrop() {
+  return (
+    <div className="royal-background" aria-hidden="true">
+      <span className="royal-glyph royal-glyph--crown">♛</span>
+      <span className="royal-glyph royal-glyph--star">✦</span>
+      <span className="royal-glyph royal-glyph--diamond">◇</span>
+      <span className="royal-laurel royal-laurel--left">❧</span>
+      <span className="royal-laurel royal-laurel--right">❧</span>
+    </div>
+  );
+}
+
+function AnniversaryCounter() {
+  const reduced = useReducedMotion();
+  const [count, setCount] = useState(0);
+  const [complete, setComplete] = useState(false);
+
+  useEffect(() => {
+    if (reduced) {
+      const frame = window.requestAnimationFrame(() => {
+        setCount(28);
+        setComplete(true);
+      });
+      return () => window.cancelAnimationFrame(frame);
+    }
+    const controls = animate(0, 28, {
+      delay: .2,
+      duration: 1.05,
+      ease: "easeOut",
+      onUpdate: (value) => setCount(Math.round(value)),
+      onComplete: () => setComplete(true)
+    });
+    return () => controls.stop();
+  }, [reduced]);
+
+  return (
+    <motion.div
+      className={`anniversary-counter${complete ? " is-complete" : ""}`}
+      aria-label="28 aniversario"
+      animate={complete && !reduced ? { scale: [1, 1.24, 1.05], filter: ["drop-shadow(0 0 0 rgba(242,213,130,0))", "drop-shadow(0 0 24px rgba(242,213,130,.9))", "drop-shadow(0 0 13px rgba(242,213,130,.58))"] } : { scale: 1 }}
+      transition={{ duration: .58, ease: "easeOut" }}
+    >
+      <strong aria-hidden="true">{count}</strong>
+      <span aria-hidden="true">ANIVERSARIO</span>
+    </motion.div>
+  );
+}
+
+function FallingRoyalLines() {
+  return (
+    <div className="falling-royal-lines" aria-hidden="true">
+      <svg className="royal-trace royal-trace--one" viewBox="0 0 150 300">
+        <path d="M75 0V118M24 170l15 55 36-42 36 42 15-55-27 20-24-49-24 49-27-20Zm15 55h72v17H39Z" />
+      </svg>
+      <svg className="royal-trace royal-trace--two" viewBox="0 0 150 300">
+        <path d="M75 0v116m0 17 37 37-37 37-37-37 37-37Zm0 74v62m-31-31h62" />
+      </svg>
+      <svg className="royal-trace royal-trace--three" viewBox="0 0 150 300">
+        <path d="M75 0v106m0 28c8 18 23 29 43 33-16 8-27 22-31 42-8-17-22-28-42-33 17-8 28-22 30-42Zm-47 98 10 10m84-10-10 10" />
+      </svg>
+      <svg className="royal-trace royal-trace--four" viewBox="0 0 150 300">
+        <path d="M75 0v120M28 169c16 8 28 23 34 44 7-20 17-34 31-43 7 15 18 27 33 36M37 225c26 14 52 14 78 0M48 246h59" />
+      </svg>
+      <svg className="royal-trace royal-trace--five" viewBox="0 0 150 300">
+        <path d="M75 0v112m-43 67 18 45 25-38 25 38 18-45-26 15-17-43-17 43-26-15Zm18 45h50" />
+      </svg>
+    </div>
+  );
+}
+
+function RoyalScrollProgress() {
+  const reduced = useReducedMotion();
+  const { scrollYProgress } = useScroll();
+  const smoothProgress = useSpring(scrollYProgress, { stiffness: 95, damping: 24, mass: .35 });
+  const crownPosition = useTransform(smoothProgress, [0, 1], [0, 164]);
+
+  if (reduced) return null;
+  return (
+    <div className="royal-scroll-progress" aria-hidden="true">
+      <span className="royal-scroll-progress__label">RECORRIDO REAL</span>
+      <div className="royal-scroll-progress__track">
+        <motion.i style={{ scaleY: smoothProgress }} />
+        <motion.b style={{ y: crownPosition }}>♛</motion.b>
+      </div>
+    </div>
   );
 }
 
@@ -206,27 +315,30 @@ function Countdown({ target, now }: { target: string; now: Date }) {
   return <div className="countdown" aria-label="Tiempo restante para el inicio">{units.map(([label, value]) => <span key={label}><strong>{String(value).padStart(2, "0")}</strong><small>{label}</small></span>)}</div>;
 }
 
-function CandidateCard({ candidate, index, canVote, onProfile, onVote }: { candidate: Candidate; index: number; canVote: boolean; onProfile: (candidate: Candidate) => void; onVote: (candidate: Candidate) => void }) {
+function CandidateCard({ candidate, index, canVote, onProfile, onVote }: { candidate: Candidate; index: number; canVote: boolean; onProfile: (candidate: Candidate, trigger: HTMLButtonElement) => void; onVote: (candidate: Candidate) => void }) {
   const reduced = useReducedMotion();
+  const representation = normalizeModuleReferences(candidate.representa_a);
+  const description = normalizeModuleReferences(candidate.descripcion);
   return (
     <motion.article className="candidate-card" initial={reduced ? false : { opacity: 0, y: 28 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, margin: "-10%" }} transition={{ delay: index * .08 }}>
       <Portrait candidate={candidate} index={index} />
       <div className="candidate-card__content">
-        <p className="gold-kicker">{candidate.representa_a}</p>
+        <p className="gold-kicker">{representation}</p>
         <h3>{candidate.nombre_completo}</h3>
         <em>{candidate.apodo_o_titulo}</em>
-        <p>{candidate.descripcion}</p>
-        <div className="candidate-card__actions"><button className="text-button" onClick={() => onProfile(candidate)}>Ver su historia <span>→</span></button>{canVote && <button className="vote-icon" aria-label={`Votar por ${candidate.nombre_completo}`} onClick={() => onVote(candidate)}>♛</button>}</div>
+        <p>{description}</p>
+        <div className="candidate-card__actions"><button className="text-button" onClick={(event) => onProfile(candidate, event.currentTarget)}>Ver su historia <span>→</span></button>{canVote && <button className="vote-icon" aria-label={`Votar por ${candidate.nombre_completo}`} onClick={() => onVote(candidate)}>♛</button>}</div>
       </div>
       <span className="candidate-number">0{index + 1}</span>
     </motion.article>
   );
 }
 
-function Portrait({ candidate, index, previewVideo = true }: { candidate: Candidate; index: number; previewVideo?: boolean }) {
+function Portrait({ candidate, index, previewVideo = true, profile = false }: { candidate: Candidate; index: number; previewVideo?: boolean; profile?: boolean }) {
+  const portraitClass = `candidate-card__portrait${profile ? " candidate-card__portrait--profile" : ""}`;
   if (candidate.video_url && previewVideo) return <VideoPreview candidate={candidate} />;
-  if (candidate.foto_principal_url) return <div className="candidate-card__portrait"><Image src={candidate.foto_principal_url} alt={candidate.nombre_completo} fill sizes="(max-width: 720px) 100vw, 420px" style={{ objectFit: "cover" }} /></div>;
-  return <div className={`candidate-card__portrait generated-portrait generated-portrait--${(index % 3) + 1}`} role="img" aria-label={`Retrato decorativo de ${candidate.nombre_completo}`}><div className="portrait-silhouette" /><span>{candidate.nombre_completo.split(" ").map((part) => part[0]).slice(0, 2).join("")}</span></div>;
+  if (candidate.foto_principal_url) return <div className={portraitClass}><Image src={candidate.foto_principal_url} alt={candidate.nombre_completo} fill sizes="(max-width: 720px) 100vw, 440px" style={{ objectFit: "cover" }} /></div>;
+  return <div className={`${portraitClass} generated-portrait generated-portrait--${(index % 3) + 1}`} role="img" aria-label={`Retrato decorativo de ${candidate.nombre_completo}`}><div className="portrait-silhouette" /><span>{candidate.nombre_completo.split(" ").map((part) => part[0]).slice(0, 2).join("")}</span></div>;
 }
 
 function VideoPreview({ candidate }: { candidate: Candidate }) {
@@ -244,25 +356,79 @@ function VideoPreview({ candidate }: { candidate: Candidate }) {
   return <div className="candidate-card__portrait"><video ref={videoRef} src={candidate.video_url ?? undefined} poster={candidate.video_poster_url ?? candidate.foto_principal_url ?? undefined} muted loop playsInline preload="metadata" aria-label={`Video de presentación de ${candidate.nombre_completo}`} /></div>;
 }
 
-function ProfileModal({ candidate, canVote, onClose, onVote }: { candidate: Candidate; canVote: boolean; onClose: () => void; onVote: () => void }) {
+function useDialogFocus(containerRef: React.RefObject<HTMLElement | null>, onClose: () => void, closeDisabled = false, returnFocusTarget: HTMLElement | null = null) {
+  const closeDisabledRef = useRef(closeDisabled);
+
   useEffect(() => {
-    const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
+    closeDisabledRef.current = closeDisabled;
+  }, [closeDisabled]);
+
+  useEffect(() => {
+    const previouslyFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    const focusFrame = window.requestAnimationFrame(() => {
+      const preferred = containerRef.current?.querySelector<HTMLElement>("[autofocus]");
+      const firstControl = containerRef.current?.querySelector<HTMLElement>("button:not([disabled]), input:not([disabled]), a[href], video[controls]");
+      (preferred ?? firstControl ?? containerRef.current)?.focus();
+    });
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && !closeDisabledRef.current) {
+        event.preventDefault();
+        onClose();
+        return;
+      }
+      if (event.key !== "Tab" || !containerRef.current) return;
+
+      const controls = [...containerRef.current.querySelectorAll<HTMLElement>(
+        "a[href], button:not([disabled]), input:not([disabled]), video[controls], [tabindex]:not([tabindex='-1'])"
+      )].filter((element) => !element.hasAttribute("hidden"));
+      const first = controls[0];
+      const last = controls.at(-1);
+      if (!first || !last) {
+        event.preventDefault();
+        containerRef.current.focus();
+      } else if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
     };
-    window.addEventListener("keydown", closeOnEscape);
-    return () => window.removeEventListener("keydown", closeOnEscape);
-  }, [onClose]);
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.cancelAnimationFrame(focusFrame);
+      window.removeEventListener("keydown", handleKeyDown);
+      document.body.style.overflow = previousOverflow;
+      const target = returnFocusTarget ?? previouslyFocused;
+      window.setTimeout(() => {
+        if (target?.isConnected) target.focus();
+      }, 0);
+    };
+  }, [containerRef, onClose, returnFocusTarget]);
+}
+
+function ProfileModal({ candidate, canVote, returnFocusTarget, onClose, onVote }: { candidate: Candidate; canVote: boolean; returnFocusTarget: HTMLElement | null; onClose: () => void; onVote: () => void }) {
+  const dialogRef = useRef<HTMLElement>(null);
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
+  const representation = normalizeModuleReferences(candidate.representa_a);
+  const description = normalizeModuleReferences(candidate.descripcion);
+  useDialogFocus(dialogRef, onClose, false, returnFocusTarget);
 
   return (
     <motion.div className="public-modal-backdrop" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onMouseDown={onClose}>
-      <motion.article className="profile-modal" role="dialog" aria-modal="true" aria-label={`Perfil de ${candidate.nombre_completo}`} initial={{ scale: .96, y: 24 }} animate={{ scale: 1, y: 0 }} exit={{ scale: .96 }} onMouseDown={(event) => event.stopPropagation()}>
-        <button className="close-button" onClick={onClose} aria-label="Cerrar">×</button>
+      <motion.article ref={dialogRef} className="profile-modal" role="dialog" aria-modal="true" aria-labelledby="profile-dialog-title" tabIndex={-1} initial={{ scale: .96, y: 24 }} animate={{ scale: 1, y: 0 }} exit={{ scale: .96 }} onAnimationComplete={() => closeButtonRef.current?.focus()} onMouseDown={(event) => event.stopPropagation()}>
+        <button ref={closeButtonRef} className="close-button" onClick={onClose} aria-label="Cerrar" autoFocus>×</button>
         <div className="profile-modal__media">
-          <Portrait candidate={candidate} index={0} previewVideo={false} />
+          <Portrait candidate={candidate} index={0} previewVideo={false} profile />
           {candidate.video_url && <video className="profile-video" src={candidate.video_url} poster={candidate.video_poster_url ?? candidate.foto_principal_url ?? undefined} controls playsInline preload="metadata" aria-label={`Video completo de ${candidate.nombre_completo}`} />}
           {candidate.galeria_urls.length > 0 && <div className="profile-gallery">{candidate.galeria_urls.map((url, index) => <Image key={url} src={url} alt={`${candidate.nombre_completo}, fotografía ${index + 1}`} width={220} height={150} sizes="(max-width: 720px) 42vw, 180px" />)}</div>}
         </div>
-        <div className="profile-modal__content"><p className="gold-kicker">{candidate.representa_a}</p><h2>{candidate.nombre_completo}</h2><em>{candidate.apodo_o_titulo}</em><blockquote>“{candidate.descripcion}”</blockquote><div className="profile-tags"><span>Propósito</span><span>Comunidad</span><span>Talento</span></div>{canVote && <button className="royal-button" onClick={onVote}>Votar por ella ♛</button>}</div>
+        <div className="profile-modal__content"><p className="gold-kicker">{representation}</p><h2 id="profile-dialog-title">{candidate.nombre_completo}</h2><em>{candidate.apodo_o_titulo}</em><blockquote>“{description}”</blockquote><div className="profile-tags"><span>Propósito</span><span>Comunidad</span><span>Talento</span></div>{canVote && <button className="royal-button" onClick={onVote}>Votar por ella ♛</button>}</div>
       </motion.article>
     </motion.div>
   );
@@ -274,14 +440,8 @@ function VoteModal({ candidate, configured, requiresCode, onClose, onSuccess }: 
   const [result, setResult] = useState<VoteResponse | null>(null);
   const [turnstileToken, setTurnstileToken] = useState("");
   const turnstileSiteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY ?? "";
-
-  useEffect(() => {
-    const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape" && !busy) onClose();
-    };
-    window.addEventListener("keydown", closeOnEscape);
-    return () => window.removeEventListener("keydown", closeOnEscape);
-  }, [busy, onClose]);
+  const dialogRef = useRef<HTMLFormElement>(null);
+  useDialogFocus(dialogRef, onClose, busy);
 
   const submit = useCallback(async (event: React.FormEvent) => {
     event.preventDefault();
@@ -309,12 +469,12 @@ function VoteModal({ candidate, configured, requiresCode, onClose, onSuccess }: 
   }, [candidate.id, code, configured, onSuccess, turnstileToken]);
 
   return (
-    <motion.div className="public-modal-backdrop" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onMouseDown={onClose}>
-      <motion.form className="vote-modal" role="dialog" aria-modal="true" aria-label={`Confirmar voto por ${candidate.nombre_completo}`} initial={{ scale: .95, y: 22 }} animate={{ scale: 1, y: 0 }} exit={{ scale: .95 }} onSubmit={submit} onMouseDown={(event) => event.stopPropagation()}>
+    <motion.div className="public-modal-backdrop" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onMouseDown={() => { if (!busy) onClose(); }}>
+      <motion.form ref={dialogRef} className="vote-modal" role="dialog" aria-modal="true" aria-labelledby="vote-dialog-title" tabIndex={-1} initial={{ scale: .95, y: 22 }} animate={{ scale: 1, y: 0 }} exit={{ scale: .95 }} onSubmit={submit} onMouseDown={(event) => event.stopPropagation()}>
         <button type="button" className="close-button" onClick={onClose} aria-label="Cerrar">×</button>
         <span className="vote-crown">♛</span>
         <p className="gold-kicker">CONFIRMA TU ELECCIÓN</p>
-        <h2>Tu voto es definitivo</h2>
+        <h2 id="vote-dialog-title">Tu voto es definitivo</h2>
         <div className="chosen-candidate"><div>{candidate.nombre_completo.split(" ").map((part) => part[0]).slice(0, 2).join("")}</div><span><small>HAS ELEGIDO A</small><strong>{candidate.nombre_completo}</strong></span></div>
         {requiresCode ? <><label>Código único de votación<input autoFocus autoComplete="one-time-code" placeholder="REY-XXXX-XXXX-XXXX" value={code} onChange={(event) => setCode(event.target.value.toUpperCase())} required minLength={10} /></label>
         <p className="code-help">Lo encontrarás en la invitación que recibiste. Solo puede usarse una vez.</p></> : <p className="google-confirmation">✓ Tu cuenta de Google será la identidad única asociada al voto.</p>}
