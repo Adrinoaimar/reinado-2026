@@ -172,8 +172,9 @@ export function VotingExperience() {
         <motion.div className="section-intro" initial={{ opacity: 0, y: 24 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, margin: "-15%" }} transition={{ duration: .65 }}>
           <p className="gold-kicker">ELLAS INSPIRAN</p>
           <h2>Conoce a las candidatas</h2>
-          <p>Cada historia merece ser escuchada. Abre un perfil para conocer su esencia.</p>
+          <p>Cada historia merece ser escuchada. Abre un perfil y encuentra el botón dorado <strong>Votar por ella</strong>.</p>
         </motion.div>
+        {phase === "open" && <a className="vote-guide" href="#candidatas-list"><span>♛</span><strong>¿Dónde voto?</strong><small>Elige una candidata y pulsa “Votar por ella”</small><b>↓</b></a>}
         {loading ? <div className="candidate-stack"><div className="candidate-card skeleton" /></div> : phase === "open" && requiresGoogle && !accessReady ? (
           <div className="access-gate">
             <span>G</span>
@@ -188,7 +189,7 @@ export function VotingExperience() {
             <p>El equipo organizador está preparando los perfiles oficiales del evento.</p>
           </div>
         ) : (
-          <div className="candidate-stack">
+          <div className="candidate-stack" id="candidatas-list">
             {candidates.map((candidate, index) => (
               <CandidateCard key={candidate.id} candidate={candidate} index={index} canVote={phase === "open" && !hasVoted && accessReady} onProfile={openProfile} onVote={setSelected} />
             ))}
@@ -218,12 +219,12 @@ export function VotingExperience() {
         <motion.div className="steps" initial="hidden" whileInView="visible" viewport={{ once: true, margin: "-10%" }} variants={{ hidden: {}, visible: { transition: { staggerChildren: .14 } } }}>
           <motion.article variants={{ hidden: { opacity: 0, y: 24 }, visible: { opacity: 1, y: 0 } }}><span>01</span><i>♛</i><h3>Conoce</h3><p>Explora los perfiles, historias y propuestas de cada candidata.</p></motion.article>
           <motion.article variants={{ hidden: { opacity: 0, y: 24 }, visible: { opacity: 1, y: 0 } }}><span>02</span><i>◇</i><h3>Elige</h3><p>Decide con calma. Tu voto es único y definitivo.</p></motion.article>
-          <motion.article variants={{ hidden: { opacity: 0, y: 24 }, visible: { opacity: 1, y: 0 } }}><span>03</span><i>✓</i><h3>Confirma</h3><p>Ingresa el código que recibiste y confirma de forma segura.</p></motion.article>
+          <motion.article variants={{ hidden: { opacity: 0, y: 24 }, visible: { opacity: 1, y: 0 } }}><span>03</span><i>✓</i><h3>Confirma</h3><p>{config.modo_acceso === "google" ? "Confirma tu voto con tu cuenta Google de forma segura." : "Ingresa el código que recibiste y confirma de forma segura."}</p></motion.article>
         </motion.div>
-        <p className="privacy-note">◉ Tu código se usa una sola vez. No almacenamos tu IP visible.</p>
+        <p className="privacy-note">◉ {config.modo_acceso === "google" ? "Tu cuenta Google permite un único voto." : "Tu código se usa una sola vez."} No almacenamos tu IP visible.</p>
       </section>
 
-      <footer><div className="public-brand"><span>♛</span><div><strong>{config.nombre_evento.toUpperCase()}</strong><small>MMXXVI</small></div></div><p>Una celebración de talento, propósito y comunidad.</p><small>Votación protegida con código único y Cloudflare Turnstile.</small></footer>
+      <footer><div className="public-brand"><span>♛</span><div><strong>{config.nombre_evento.toUpperCase()}</strong><small>MMXXVI</small></div></div><p>Una celebración de talento, propósito y comunidad.</p><small>Votación protegida con {config.modo_acceso === "google" ? "Google" : "código único"} y Cloudflare Turnstile.</small></footer>
 
       <AnimatePresence>
         {profile && <ProfileModal candidate={profile} canVote={phase === "open" && !hasVoted && accessReady} returnFocusTarget={profileTrigger} onClose={closeProfile} onVote={voteFromProfile} />}
@@ -344,7 +345,7 @@ function CandidateCard({ candidate, index, canVote, onProfile, onVote }: { candi
         <h3>{candidate.nombre_completo}</h3>
         <em>{candidate.apodo_o_titulo}</em>
         <p>{description}</p>
-        <div className="candidate-card__actions"><button className="text-button" onClick={(event) => onProfile(candidate, event.currentTarget)}>Ver su historia <span>→</span></button>{canVote && <button className="vote-icon" aria-label={`Votar por ${candidate.nombre_completo}`} onClick={() => onVote(candidate)}>♛</button>}</div>
+        <div className="candidate-card__actions"><button className="text-button" onClick={(event) => onProfile(candidate, event.currentTarget)}>Ver su historia <span>→</span></button>{canVote && <button className="vote-action" aria-label={`Votar por ${candidate.nombre_completo}`} onClick={() => onVote(candidate)}><span>♛</span> Votar por ella</button>}</div>
       </div>
       <span className="candidate-number">0{index + 1}</span>
     </motion.article>
