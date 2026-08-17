@@ -46,7 +46,9 @@ export function VotingExperience() {
     const applySession = (session: Awaited<ReturnType<typeof client.auth.getSession>>["data"]["session"]) => {
       if (!active) return;
       const user = session?.user;
-      setAccess(user?.app_metadata?.provider === "google" && !user.is_anonymous ? "google" : user ? "anonymous" : "none");
+      const hasGoogleIdentity = user?.identities?.some((identity) => identity.provider === "google") ?? false;
+      const isGoogleUser = Boolean(user && !user.is_anonymous && (user.app_metadata?.provider === "google" || hasGoogleIdentity));
+      setAccess(isGoogleUser ? "google" : user ? "anonymous" : "none");
     };
     const { data: authListener } = client.auth.onAuthStateChange((_event, session) => {
       applySession(session);
