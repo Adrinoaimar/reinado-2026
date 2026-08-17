@@ -27,3 +27,5 @@ que las sube al bucket de Supabase Storage `candidatas-fotos`.
 | 6 | 06-viviana-alache-alache | Viviana Magdalena Alache Alache |
 | 7 | 07-wendy-dominguez-aguilar | Wendy Casthell Dominguez Aguilar |
 | 8 | 08-cielo-azabache-olivares | Cielo Nicol Azabache Olivares |
+| 9 | 09-luana-cueva-valdez | Luana Mayte Cueva Valdez |
+| 10 | 10-daniela-atoche-lazo | Daniela Yamilet Atoche Lazo |
