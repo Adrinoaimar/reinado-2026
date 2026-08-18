@@ -60,8 +60,9 @@ export function VotingExperience() {
 
     void (async () => {
       const callbackParams = new URLSearchParams(window.location.search);
+      const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ""));
       const callbackCode = callbackParams.get("code");
-      const callbackError = callbackParams.get("error_description") ?? callbackParams.get("error");
+      const callbackError = callbackParams.get("error_description") ?? callbackParams.get("error") ?? hashParams.get("error_description") ?? hashParams.get("error");
       if (callbackError) {
         setAuthError(callbackError);
         window.history.replaceState({}, document.title, `${window.location.pathname}${window.location.hash}`);

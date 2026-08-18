@@ -15,8 +15,10 @@ export function getSupabaseBrowserClient(): SupabaseClient {
     auth: {
       persistSession: true,
       autoRefreshToken: true,
-      flowType: "pkce",
-      detectSessionInUrl: false
+      // La votación es una SPA pública. Implicit evita perder el code-verifier
+      // cuando el enlace se abre dentro de WhatsApp/Instagram en móvil.
+      flowType: "implicit",
+      detectSessionInUrl: true
     }
   });
   return browserClient;
