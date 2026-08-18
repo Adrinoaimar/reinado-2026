@@ -472,7 +472,15 @@ function VoteModal({ candidate, configured, requiresCode, onClose, onSuccess }: 
     }
     const client = getSupabaseBrowserClient();
     const { data, error } = await client.functions.invoke("emitir-voto", { body: { candidataId: candidate.id, codigo: code, turnstileToken } });
-    const response = (data ?? { ok: false, code: "ERROR", message: error?.message ?? "No pudimos registrar el voto." }) as VoteResponse;
+    let errorMessage = error?.message ?? "No pudimos registrar el voto.";
+    const errorContext = error && typeof error === "object" ? (error as { context?: { clone?: () => Response } }).context : undefined;
+    if (errorContext?.clone) {
+      try {
+        const errorBody = await errorContext.clone().json() as Partial<VoteResponse>;
+        if (typeof errorBody.message === "string") errorMessage = errorBody.message;
+      } catch { /* La respuesta puede no contener JSON. */ }
+    }
+    const response = (data ?? { ok: false, code: "ERROR", message: errorMessage }) as VoteResponse;
     setResult(response);
     setBusy(false);
     if (!response.ok) {
