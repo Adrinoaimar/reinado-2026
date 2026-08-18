@@ -166,6 +166,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, [tabindex]:focus-vis
 .access-gate > span { display: grid; place-items: center; width: 54px; height: 54px; margin: 0 auto 17px; border-radius: 50%; color: #fff; background: #273b58; font-family: ui-sans-serif, system-ui; font-size: 22px; font-weight: 800; }
 .access-gate h3 { margin: 0 0 9px; color: var(--cream); font-size: 27px; }
 .access-gate p { max-width: 430px; margin: 0 auto 22px; color: var(--muted); font-size: 11px; line-height: 1.7; }
+.access-gate .auth-error { margin: 0 auto 16px; padding: 10px 12px; border: 1px solid rgba(145,35,72,.25); color: #842447; background: #faeaf0; font-size: 10px; line-height: 1.5; }
 @keyframes shimmer { to { background-position: -200% 0; } }
 
 .public-results { padding: 88px 24px; background: linear-gradient(160deg, #0b1c31, #030a16); }

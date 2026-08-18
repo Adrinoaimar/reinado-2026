@@ -35,6 +35,7 @@ export function VotingExperience() {
   const [hasVoted, setHasVoted] = useState(() => typeof window !== "undefined" && localStorage.getItem("reinado:voted") === "true");
   const [loading, setLoading] = useState(configured);
   const [access, setAccess] = useState<"none" | "anonymous" | "google">("none");
+  const [authError, setAuthError] = useState("");
   const [now, setNow] = useState(() => new Date());
   const [publicResults, setPublicResults] = useState<PublicResult[]>([]);
   const previewHandled = useRef(false);
@@ -54,13 +55,21 @@ export function VotingExperience() {
     };
     const { data: authListener } = client.auth.onAuthStateChange((_event, session) => {
       applySession(session);
+      if (session) setAuthError("");
     });
 
     void (async () => {
-      const callbackCode = new URLSearchParams(window.location.search).get("code");
+      const callbackParams = new URLSearchParams(window.location.search);
+      const callbackCode = callbackParams.get("code");
+      const callbackError = callbackParams.get("error_description") ?? callbackParams.get("error");
+      if (callbackError) {
+        setAuthError(callbackError);
+        window.history.replaceState({}, document.title, `${window.location.pathname}${window.location.hash}`);
+      }
       if (callbackCode) {
         const { error: exchangeError } = await client.auth.exchangeCodeForSession(callbackCode);
-        if (!exchangeError) window.history.replaceState({}, document.title, `${window.location.pathname}${window.location.hash}`);
+        if (exchangeError) setAuthError(exchangeError.message);
+        window.history.replaceState({}, document.title, `${window.location.pathname}${window.location.hash}`);
       }
       const [candidateResult, configResult] = await Promise.all([
         client.from("candidatas").select("*").eq("activa", true).order("orden"),
@@ -187,6 +196,7 @@ export function VotingExperience() {
             <span>G</span>
             <h3>Acceso con Google requerido</h3>
             <p>Inicia sesión para consultar los perfiles y emitir un único voto durante este evento.</p>
+            {authError && <p className="auth-error" role="alert">Google informó: {authError}</p>}
             <button className="royal-button" onClick={() => void signInWithGoogle()}>Continuar con Google</button>
           </div>
         ) : candidates.length === 0 ? (
