@@ -133,7 +133,7 @@ export function VotingExperience() {
     if (!configured) return;
     await getSupabaseBrowserClient().auth.signInWithOAuth({
       provider: "google",
-      options: { redirectTo: `${window.location.origin}${window.location.pathname}` }
+      options: { redirectTo: `${window.location.origin}/auth/callback/` }
     });
   }
 
