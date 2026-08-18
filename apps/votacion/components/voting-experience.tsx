@@ -25,6 +25,18 @@ const demoConfig: VotingConfig = {
 
 type PublicResult = { candidata_id: string; nombre_completo: string; votos: number; porcentaje: number };
 
+function formatAuthError(message: string) {
+  const normalized = message.replace(/\+/g, " ");
+  const lower = normalized.toLowerCase();
+  if (lower.includes("signups not allowed")) {
+    return "Google no pudo crear esta cuenta. El registro de nuevos usuarios está bloqueado en Supabase.";
+  }
+  if (lower.includes("code verifier") || lower.includes("pkce")) {
+    return "El navegador no conservó la verificación de Google. Abrí el enlace en Chrome o Safari y volvé a intentarlo.";
+  }
+  return normalized;
+}
+
 export function VotingExperience() {
   const [candidates, setCandidates] = useState<Candidate[]>(demoCandidates);
   const [config, setConfig] = useState<VotingConfig>(demoConfig);
@@ -64,13 +76,13 @@ export function VotingExperience() {
       const callbackCode = callbackParams.get("code");
       const callbackError = callbackParams.get("error_description") ?? callbackParams.get("error") ?? hashParams.get("error_description") ?? hashParams.get("error");
       if (callbackError) {
-        setAuthError(callbackError);
-        window.history.replaceState({}, document.title, `${window.location.pathname}${window.location.hash}`);
+        setAuthError(formatAuthError(callbackError));
+        window.history.replaceState({}, document.title, window.location.pathname);
       }
       if (callbackCode) {
         const { error: exchangeError } = await client.auth.exchangeCodeForSession(callbackCode);
-        if (exchangeError) setAuthError(exchangeError.message);
-        window.history.replaceState({}, document.title, `${window.location.pathname}${window.location.hash}`);
+        if (exchangeError) setAuthError(formatAuthError(exchangeError.message));
+        window.history.replaceState({}, document.title, window.location.pathname);
       }
       const [candidateResult, configResult] = await Promise.all([
         client.from("candidatas").select("*").eq("activa", true).order("orden"),
@@ -146,10 +158,15 @@ export function VotingExperience() {
 
   async function signInWithGoogle() {
     if (!configured) return;
-    await getSupabaseBrowserClient().auth.signInWithOAuth({
-      provider: "google",
-      options: { redirectTo: `${window.location.origin}${window.location.pathname}` }
-    });
+    try {
+      const { error } = await getSupabaseBrowserClient().auth.signInWithOAuth({
+        provider: "google",
+        options: { redirectTo: `${window.location.origin}${window.location.pathname}` }
+      });
+      if (error) setAuthError(formatAuthError(error.message));
+    } catch (error) {
+      setAuthError(formatAuthError(error instanceof Error ? error.message : "No se pudo iniciar sesión con Google."));
+    }
   }
 
   return (
