@@ -47,7 +47,9 @@ export function VotingExperience() {
       if (!active) return;
       const user = session?.user;
       const hasGoogleIdentity = user?.identities?.some((identity) => identity.provider === "google") ?? false;
-      const isGoogleUser = Boolean(user && !user.is_anonymous && (user.app_metadata?.provider === "google" || hasGoogleIdentity));
+      // En algunos navegadores móviles la sesión inicial llega sin `identities`.
+      // Este sitio solo ofrece acceso público mediante Google; el backend valida la identidad al votar.
+      const isGoogleUser = Boolean(user && !user.is_anonymous && (user.app_metadata?.provider === "google" || hasGoogleIdentity || !user.app_metadata?.provider));
       setAccess(isGoogleUser ? "google" : user ? "anonymous" : "none");
     };
     const { data: authListener } = client.auth.onAuthStateChange((_event, session) => {
@@ -131,7 +133,7 @@ export function VotingExperience() {
     if (!configured) return;
     await getSupabaseBrowserClient().auth.signInWithOAuth({
       provider: "google",
-      options: { redirectTo: window.location.href }
+      options: { redirectTo: `${window.location.origin}${window.location.pathname}` }
     });
   }
 
