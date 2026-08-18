@@ -57,6 +57,11 @@ export function VotingExperience() {
     });
 
     void (async () => {
+      const callbackCode = new URLSearchParams(window.location.search).get("code");
+      if (callbackCode) {
+        const { error: exchangeError } = await client.auth.exchangeCodeForSession(callbackCode);
+        if (!exchangeError) window.history.replaceState({}, document.title, `${window.location.pathname}${window.location.hash}`);
+      }
       const [candidateResult, configResult] = await Promise.all([
         client.from("candidatas").select("*").eq("activa", true).order("orden"),
         client.from("configuracion_votacion").select("*").eq("id", 1).single()
@@ -133,7 +138,7 @@ export function VotingExperience() {
     if (!configured) return;
     await getSupabaseBrowserClient().auth.signInWithOAuth({
       provider: "google",
-      options: { redirectTo: `${window.location.origin}/auth/callback/` }
+      options: { redirectTo: `${window.location.origin}${window.location.pathname}` }
     });
   }
 
